@@ -20,6 +20,9 @@
 
 
 #include "SC_SequencedCommand.h"
+#include "SC_GraphDef.h"
+#include "SC_BufGen.h"
+#include "SC_Unit.h"
 #include "SC_CoreAudio.h"
 #include "SC_Errors.h"
 #include "scsynthsend.h"
@@ -30,13 +33,26 @@
 #include "../../common/SC_SndFileHelpers.hpp"
 #include "SC_WorldOptions.h"
 
+#include <filesystem>
+
 const size_t ERR_BUF_SIZE(512);
+
+#define ReturnSCErrIfNil(ptr)                                                                                          \
+    if (!ptr)                                                                                                          \
+    return kSCErr_OutOfRealTimeMemory
+#define ThrowIfNil(ptr)                                                                                                \
+    if (!ptr)                                                                                                          \
+        throw std::runtime_error(                                                                                      \
+            std::string("alloc failed, increase server's memory allocation (e.g. via ServerOptions)"));
 
 #define GET_COMPLETION_MSG(msg)                                                                                        \
     mMsgSize = msg.getbsize();                                                                                         \
     if (mMsgSize) {                                                                                                    \
         mMsgData = (char*)World_Alloc(mWorld, mMsgSize);                                                               \
+        ReturnSCErrIfNil(mMsgData);                                                                                    \
         msg.getb(mMsgData, mMsgSize);                                                                                  \
+    } else if (msg.nextTag() == 'i') {                                                                                 \
+        msg.geti(0);                                                                                                   \
     }
 
 void PerformCompletionMsg(World* inWorld, OSC_Packet* inPacket);
@@ -106,6 +122,7 @@ char* allocAndRestrictPath(World* mWorld, const char* inPath, const char* restri
 
     // Now we can make a long-term home for the string and return it
     char* saferPath = (char*)World_Alloc(mWorld, strlen(strbuf) + 1);
+    ThrowIfNil(saferPath);
     strcpy(saferPath, strbuf);
     return saferPath;
 }
@@ -267,6 +284,9 @@ int BufAllocCmd::Init(char* inData, int inSize) {
 
     GET_COMPLETION_MSG(msg);
 
+    auto sampleRate = msg.getf(0);
+    mSampleRate = sampleRate > 0.0 ? sampleRate : mWorld->mSampleRate;
+
     return kSCErr_None;
 }
 
@@ -275,7 +295,11 @@ void BufAllocCmd::CallDestructor() { this->~BufAllocCmd(); }
 bool BufAllocCmd::Stage2() {
     SndBuf* buf = World_GetNRTBuf(mWorld, mBufIndex);
     mFreeData = buf->data;
-    bufAlloc(buf, mNumChannels, mNumFrames, mWorld->mFullRate.mSampleRate);
+    SCErr err = bufAlloc(buf, mNumChannels, mNumFrames, mSampleRate);
+    if (err) {
+        scprintf("/b_alloc: memory allocation failed\n");
+        return false;
+    }
     mSndBuf = *buf;
     return true;
 }
@@ -307,6 +331,7 @@ BufGenCmd::~BufGenCmd() { World_Free(mWorld, mData); }
 int BufGenCmd::Init(char* inData, int inSize) {
     mSize = inSize;
     mData = (char*)World_Alloc(mWorld, mSize);
+    ReturnSCErrIfNil(mData);
     memcpy(mData, inData, mSize);
 
     sc_msg_iter msg(mSize, mData);
@@ -375,7 +400,7 @@ bool BufFreeCmd::Stage2() {
     mFreeData = buf->data;
 #ifndef NO_LIBSNDFILE
     if (buf->sndfile)
-        sf_close(buf->sndfile);
+        sf_close(GETSNDFILE(buf));
 #endif
     SndBuf_Init(buf);
     return true;
@@ -444,6 +469,7 @@ int BufAllocReadCmd::Init(char* inData, int inSize) {
         mFilename = allocAndRestrictPath(mWorld, filename, mWorld->mRestrictedPath);
     } else {
         mFilename = (char*)World_Alloc(mWorld, strlen(filename) + 1);
+        ReturnSCErrIfNil(mFilename);
         strcpy(mFilename, filename);
     }
 
@@ -533,6 +559,7 @@ int BufReadCmd::Init(char* inData, int inSize) {
         mFilename = allocAndRestrictPath(mWorld, filename, mWorld->mRestrictedPath);
     } else {
         mFilename = (char*)World_Alloc(mWorld, strlen(filename) + 1);
+        ReturnSCErrIfNil(mFilename);
         strcpy(mFilename, filename);
     }
 
@@ -600,7 +627,7 @@ bool BufReadCmd::Stage2() {
     }
 
     if (buf->sndfile)
-        sf_close(buf->sndfile);
+        sf_close(GETSNDFILE(buf));
 
     if (mLeaveFileOpen) {
         buf->sndfile = sf;
@@ -689,6 +716,7 @@ int BufAllocReadChannelCmd::Init(char* inData, int inSize) {
         mFilename = allocAndRestrictPath(mWorld, filename, mWorld->mRestrictedPath);
     } else {
         mFilename = (char*)World_Alloc(mWorld, strlen(filename) + 1);
+        ReturnSCErrIfNil(mFilename);
         strcpy(mFilename, filename);
     }
 
@@ -808,6 +836,7 @@ int BufReadChannelCmd::Init(char* inData, int inSize) {
         mFilename = allocAndRestrictPath(mWorld, filename, mWorld->mRestrictedPath);
     } else {
         mFilename = (char*)World_Alloc(mWorld, strlen(filename) + 1);
+        ReturnSCErrIfNil(mFilename);
         strcpy(mFilename, filename);
     }
 
@@ -903,7 +932,7 @@ bool BufReadChannelCmd::Stage2() {
 
 leave:
     if (buf->sndfile)
-        sf_close(buf->sndfile);
+        sf_close(GETSNDFILE(buf));
 
     if (mLeaveFileOpen) {
         buf->sndfile = sf;
@@ -958,6 +987,7 @@ int BufWriteCmd::Init(char* inData, int inSize) {
         mFilename = allocAndRestrictPath(mWorld, filename, mWorld->mRestrictedPath);
     } else {
         mFilename = (char*)World_Alloc(mWorld, strlen(filename) + 1);
+        ReturnSCErrIfNil(mFilename);
         strcpy(mFilename, filename);
     }
 
@@ -1014,7 +1044,7 @@ bool BufWriteCmd::Stage2() {
     }
 
     if (buf->sndfile)
-        sf_close(buf->sndfile);
+        sf_close(GETSNDFILE(buf));
 
     if (mLeaveFileOpen) {
         buf->sndfile = sf;
@@ -1057,7 +1087,7 @@ bool BufCloseCmd::Stage2() {
 #else
     SndBuf* buf = World_GetNRTBuf(mWorld, mBufIndex);
     if (buf->sndfile) {
-        sf_close(buf->sndfile);
+        sf_close(GETSNDFILE(buf));
         buf->sndfile = nullptr;
     }
     return true;
@@ -1145,6 +1175,33 @@ bool AudioStatusCmd::Stage2() {
 
 ///////////////////////////////////////////////////////////////////////////
 
+RTMemStatusCmd::RTMemStatusCmd(World* inWorld, ReplyAddress* inReplyAddress):
+    SC_SequencedCommand(inWorld, inReplyAddress) {}
+
+void RTMemStatusCmd::CallDestructor() { this->~RTMemStatusCmd(); }
+
+bool RTMemStatusCmd::Stage2() {
+    // we stop replying to status requests after receiving /quit
+    if (mWorld->hw->mTerminating == true)
+        return false;
+
+    small_scpacket packet;
+    packet.adds("/rtMemoryStatus.reply");
+    packet.maketags(3);
+    packet.addtag(',');
+    packet.addtag('i');
+    packet.addtag('i');
+
+    packet.addi(World_TotalFree(mWorld));
+    packet.addi(World_LargestFreeChunk(mWorld));
+
+    SendReply(&mReplyAddress, packet.data(), packet.size());
+
+    return false;
+}
+
+///////////////////////////////////////////////////////////////////////////
+
 NotifyCmd::NotifyCmd(World* inWorld, ReplyAddress* inReplyAddress): SC_SequencedCommand(inWorld, inReplyAddress) {}
 
 int NotifyCmd::Init(char* inData, int inSize) {
@@ -1211,6 +1268,7 @@ bool NotifyCmd::Stage2() {
         SendDoneWithVarArgs(&mReplyAddress, "/notify", "ii", clientID, (int)hw->mMaxUsers);
 
     } else {
+        // keep this in sync w/ `World_RemoveClient` implementation for TCP de-registration via disconnect
         auto const it = std::find(hw->mUsers->begin(), hw->mUsers->end(), mReplyAddress);
         if (it != hw->mUsers->end()) {
             // remove from list
@@ -1242,9 +1300,11 @@ SendFailureCmd::~SendFailureCmd() {
 
 void SendFailureCmd::InitSendFailureCmd(const char* inCmdName, const char* inErrString) {
     mCmdName = (char*)World_Alloc(mWorld, strlen(inCmdName) + 1);
+    ThrowIfNil(mCmdName);
     strcpy(mCmdName, inCmdName);
 
     mErrString = (char*)World_Alloc(mWorld, strlen(inErrString) + 1);
+    ThrowIfNil(mErrString);
     strcpy(mErrString, inErrString);
 }
 
@@ -1259,17 +1319,19 @@ bool SendFailureCmd::Stage2() {
 
 RecvSynthDefCmd::RecvSynthDefCmd(World* inWorld, ReplyAddress* inReplyAddress):
     SC_SequencedCommand(inWorld, inReplyAddress),
-    mBuffer(nullptr) {}
+    mBuffer(nullptr),
+    mSize(0) {}
 
 int RecvSynthDefCmd::Init(char* inData, int inSize) {
     sc_msg_iter msg(inSize, inData);
 
-    int size = msg.getbsize();
-    if (!size)
+    mSize = msg.getbsize();
+    if (!mSize)
         throw kSCErr_WrongArgType;
 
-    mBuffer = (char*)World_Alloc(mWorld, size);
-    msg.getb(mBuffer, size);
+    mBuffer = (char*)World_Alloc(mWorld, mSize);
+    ReturnSCErrIfNil(mBuffer);
+    msg.getb(mBuffer, mSize);
 
     GET_COMPLETION_MSG(msg);
 
@@ -1282,7 +1344,7 @@ RecvSynthDefCmd::~RecvSynthDefCmd() { World_Free(mWorld, mBuffer); }
 void RecvSynthDefCmd::CallDestructor() { this->~RecvSynthDefCmd(); }
 
 bool RecvSynthDefCmd::Stage2() {
-    mDefs = GraphDef_Recv(mWorld, mBuffer, mDefs);
+    mDefs = GraphDef_Recv(mWorld, mBuffer, mSize, mDefs);
 
     return true;
 }
@@ -1312,6 +1374,7 @@ int LoadSynthDefCmd::Init(char* inData, int inSize) {
         mFilename = allocAndRestrictPath(mWorld, filename, mWorld->mRestrictedPath);
     } else {
         mFilename = (char*)World_Alloc(mWorld, strlen(filename) + 1);
+        ReturnSCErrIfNil(mFilename);
         strcpy(mFilename, filename);
     }
 
@@ -1328,7 +1391,16 @@ void LoadSynthDefCmd::CallDestructor() { this->~LoadSynthDefCmd(); }
 bool LoadSynthDefCmd::Stage2() {
     char* fname = mFilename;
     mDefs = GraphDef_LoadGlob(mWorld, fname, mDefs);
-    return true;
+    if (mDefs) {
+        return true;
+    }
+    {
+        char str[ERR_BUF_SIZE];
+        snprintf(str, ERR_BUF_SIZE, "File '%s' could not be opened\n", mFilename);
+        SendFailure(&mReplyAddress, "/d_load", mFilename);
+        scprintf(str);
+        return false;
+    }
 }
 
 bool LoadSynthDefCmd::Stage3() {
@@ -1356,6 +1428,7 @@ int LoadSynthDefDirCmd::Init(char* inData, int inSize) {
         mFilename = allocAndRestrictPath(mWorld, filename, mWorld->mRestrictedPath);
     } else {
         mFilename = (char*)World_Alloc(mWorld, strlen(filename) + 1);
+        ReturnSCErrIfNil(mFilename);
         strcpy(mFilename, filename);
     }
 
@@ -1370,9 +1443,24 @@ LoadSynthDefDirCmd::~LoadSynthDefDirCmd() { World_Free(mWorld, mFilename); }
 void LoadSynthDefDirCmd::CallDestructor() { this->~LoadSynthDefDirCmd(); }
 
 bool LoadSynthDefDirCmd::Stage2() {
+    if (!std::filesystem::exists(mFilename)) {
+        char str[ERR_BUF_SIZE];
+        snprintf(str, ERR_BUF_SIZE, "Could not load synthdefs. Directory '%s' does not exist\n", mFilename);
+        SendFailure(&mReplyAddress, "/d_loadDir", mFilename);
+        scprintf(str);
+        return false;
+    }
     mDefs = GraphDef_LoadDir(mWorld, mFilename, mDefs);
-
-    return true;
+    if (mDefs) {
+        return true;
+    }
+    {
+        char str[ERR_BUF_SIZE];
+        snprintf(str, ERR_BUF_SIZE, "No synthdefs found in directory: '%s'\n", mFilename);
+        SendFailure(&mReplyAddress, "/d_loadDir", mFilename);
+        scprintf(str);
+        return false;
+    }
 }
 
 bool LoadSynthDefDirCmd::Stage3() {
@@ -1391,6 +1479,7 @@ SendReplyCmd::SendReplyCmd(World* inWorld, ReplyAddress* inReplyAddress):
 int SendReplyCmd::Init(char* inData, int inSize) {
     mMsgSize = inSize;
     mMsgData = (char*)World_Alloc(mWorld, mMsgSize);
+    ReturnSCErrIfNil(mMsgData);
     memcpy(mMsgData, inData, inSize);
     return kSCErr_None;
 }
@@ -1404,13 +1493,14 @@ bool SendReplyCmd::Stage2() {
 
 ///////////////////////////////////////////////////////////////////////////
 
-int PerformAsynchronousCommand(
+SCErr PerformAsynchronousCommand(
     World* inWorld, void* replyAddr, const char* cmdName, void* cmdData,
     AsyncStageFn stage2, // stage2 is non real time
     AsyncStageFn stage3, // stage3 is real time - completion msg performed if stage3 returns true
     AsyncStageFn stage4, // stage4 is non real time - sends done if stage4 returns true
-    AsyncFreeFn cleanup, int completionMsgSize, void* completionMsgData) {
+    AsyncFreeFn cleanup, int completionMsgSize, const void* completionMsgData) {
     void* space = World_Alloc(inWorld, sizeof(AsyncPlugInCmd));
+    ReturnSCErrIfNil(space);
     AsyncPlugInCmd* cmd = new (space) AsyncPlugInCmd(inWorld, (ReplyAddress*)replyAddr, cmdName, cmdData, stage2,
                                                      stage3, stage4, cleanup, completionMsgSize, completionMsgData);
     if (!cmd)
@@ -1424,13 +1514,35 @@ int PerformAsynchronousCommand(
 
 ///////////////////////////////////////////////////////////////////////////
 
-AsyncPlugInCmd::AsyncPlugInCmd(
+SCErr PerformAsynchronousCommandEx(
+    World* inWorld, void* replyAddr, const char* cmdName, void* cmdData,
+    AsyncStageFnEx stage2, // stage2 is non real time
+    AsyncStageFnEx stage3, // stage3 is real time - completion msg performed if stage3 returns true
+    AsyncStageFnEx stage4, // stage4 is non real time - sends done if stage4 returns true
+    AsyncFreeFn cleanup, int completionMsgSize, const void* completionMsgData) {
+    void* space = World_Alloc(inWorld, sizeof(AsyncPlugInCmdEx));
+    ReturnSCErrIfNil(space);
+    AsyncPlugInCmdEx* cmd = new (space) AsyncPlugInCmdEx(inWorld, (ReplyAddress*)replyAddr, cmdName, cmdData, stage2,
+                                                         stage3, stage4, cleanup, completionMsgSize, completionMsgData);
+    if (!cmd)
+        return kSCErr_Failed;
+    if (inWorld->mRealTime)
+        cmd->CallNextStage();
+    else
+        cmd->CallEveryStage();
+    return kSCErr_None;
+}
+
+///////////////////////////////////////////////////////////////////////////
+
+template <typename StageFn>
+AsyncPlugInCmd_<StageFn>::AsyncPlugInCmd_(
     World* inWorld, ReplyAddress* inReplyAddress, const char* cmdName, void* cmdData,
-    AsyncStageFn stage2, // stage2 is non real time
-    AsyncStageFn stage3, // stage3 is real time - completion msg performed if stage3 returns true
-    AsyncStageFn stage4, // stage4 is non real time - sends done if stage4 returns true
+    StageFn stage2, // stage2 is non real time
+    StageFn stage3, // stage3 is real time - completion msg performed if stage3 returns true
+    StageFn stage4, // stage4 is non real time - sends done if stage4 returns true
     AsyncFreeFn cleanup, // cleanup is called in real time
-    int completionMsgSize, void* completionMsgData):
+    int completionMsgSize, const void* completionMsgData):
     SC_SequencedCommand(inWorld, inReplyAddress),
     mCmdName(cmdName),
     mCmdData(cmdData),
@@ -1438,31 +1550,140 @@ AsyncPlugInCmd::AsyncPlugInCmd(
     mStage3(stage3),
     mStage4(stage4),
     mCleanup(cleanup) {
-    if (completionMsgSize && completionMsgData) {
+    if (completionMsgSize > 0 && completionMsgData) {
         mMsgSize = completionMsgSize;
         mMsgData = (char*)World_Alloc(mWorld, mMsgSize);
+        ThrowIfNil(mMsgData);
         memcpy(mMsgData, completionMsgData, mMsgSize);
     }
 }
 
-AsyncPlugInCmd::~AsyncPlugInCmd() { (mCleanup)(mWorld, mCmdData); }
+template <typename StageFn> AsyncPlugInCmd_<StageFn>::~AsyncPlugInCmd_() {
+    // NOTE: before SC 3.15 the clean up function could not be NULL.
+    if (mCleanup)
+        mCleanup(mWorld, mCmdData);
+}
 
-void AsyncPlugInCmd::CallDestructor() { this->~AsyncPlugInCmd(); }
+template <typename StageFn> void AsyncPlugInCmd_<StageFn>::CallDestructor() { this->~AsyncPlugInCmd_(); }
 
-bool AsyncPlugInCmd::Stage2() {
-    bool result = !mStage2 || (mStage2)(mWorld, mCmdData);
+template <typename StageFn> bool AsyncPlugInCmd_<StageFn>::Stage2() {
+    bool result;
+    if constexpr (std::is_same_v<StageFn, AsyncStageFnEx>)
+        result = !mStage2 || (mStage2)(mWorld, mCmdData, &mReplyAddress);
+    else
+        result = !mStage2 || (mStage2)(mWorld, mCmdData);
     return result;
 }
 
-bool AsyncPlugInCmd::Stage3() {
-    bool result = !mStage3 || (mStage3)(mWorld, mCmdData);
+template <typename StageFn> bool AsyncPlugInCmd_<StageFn>::Stage3() {
+    bool result;
+    if constexpr (std::is_same_v<StageFn, AsyncStageFnEx>)
+        result = !mStage3 || (mStage3)(mWorld, mCmdData, &mReplyAddress);
+    else
+        result = !mStage3 || (mStage3)(mWorld, mCmdData);
     if (result)
         SEND_COMPLETION_MSG;
     return result;
 }
 
-void AsyncPlugInCmd::Stage4() {
-    bool result = !mStage4 || (mStage4)(mWorld, mCmdData);
+template <typename StageFn> void AsyncPlugInCmd_<StageFn>::Stage4() {
+    bool result;
+    if constexpr (std::is_same_v<StageFn, AsyncStageFnEx>)
+        result = !mStage4 || (mStage4)(mWorld, mCmdData, &mReplyAddress);
+    else
+        result = !mStage4 || (mStage4)(mWorld, mCmdData);
     if (result && mCmdName && mReplyAddress.mReplyFunc != null_reply_func)
-        SendDone((char*)mCmdName);
+        SendDone(mCmdName);
+}
+
+///////////////////////////////////////////////////////////////////////////
+
+SCErr PerformAsyncUnitCommand(
+    Unit* inUnit, void* replyAddr, const char* cmdName, void* cmdData,
+    AsyncUnitStageFn stage2, // stage2 is non real time
+    AsyncUnitStageFn stage3, // stage3 is real time - completion msg performed if stage3 returns true
+    AsyncUnitStageFn stage4, // stage4 is non real time - sends done if stage4 returns true
+    AsyncFreeFn cleanup, int completionMsgSize, const void* completionMsgData) {
+    if (!Graph_HasParent(inUnit->mParent)) {
+        // If Graph_HasParent() returns false, it means that the graph has been removed. This can only
+        // happen if DoAsyncUnitCommand() is called in a Unit destructor (which is not allowed).
+        // This check is important because it makes sure that we don't increment a reference count
+        // that has already gone to zero!
+        scprintf("ERROR: cannot call DoAsyncUnitCommand() in a Unit destructor!\n");
+        return kSCErr_Failed;
+    }
+
+    void* space = World_Alloc(inUnit->mWorld, sizeof(AsyncUnitCmd));
+    ReturnSCErrIfNil(space);
+    AsyncUnitCmd* cmd = new (space) AsyncUnitCmd(inUnit, (ReplyAddress*)replyAddr, cmdName, cmdData, stage2, stage3,
+                                                 stage4, cleanup, completionMsgSize, completionMsgData);
+    if (!cmd)
+        return kSCErr_Failed;
+    if (inUnit->mWorld->mRealTime)
+        cmd->CallNextStage();
+    else
+        cmd->CallEveryStage();
+    return kSCErr_None;
+}
+
+///////////////////////////////////////////////////////////////////////////
+
+AsyncUnitCmd::AsyncUnitCmd(
+    Unit* inUnit, ReplyAddress* inReplyAddress, const char* cmdName, void* cmdData,
+    AsyncUnitStageFn stage2, // stage2 is non real time
+    AsyncUnitStageFn stage3, // stage3 is real time - completion msg performed if stage3 returns true
+    AsyncUnitStageFn stage4, // stage4 is non real time - sends done if stage4 returns true
+    AsyncFreeFn cleanup, // cleanup is called in real time
+    int completionMsgSize, const void* completionMsgData):
+    SC_SequencedCommand(inUnit->mWorld, inReplyAddress),
+    mUnit(inUnit),
+    mCmdName(cmdName),
+    mCmdData(cmdData),
+    mStage2(stage2),
+    mStage3(stage3),
+    mStage4(stage4),
+    mCleanup(cleanup),
+    mAlive(true) {
+    // make sure that the owning Graph is kept alive for the whole duration of the command!
+    Graph_AddRef(inUnit->mParent);
+
+    if (completionMsgSize > 0 && completionMsgData) {
+        mMsgSize = completionMsgSize;
+        mMsgData = (char*)World_Alloc(mWorld, mMsgSize);
+        ThrowIfNil(mMsgData);
+        memcpy(mMsgData, completionMsgData, mMsgSize);
+    }
+}
+
+AsyncUnitCmd::~AsyncUnitCmd() {
+    if (mCleanup)
+        mCleanup(mWorld, mCmdData);
+    // finally release the owning Graph
+    Graph_Release(mUnit->mParent);
+}
+
+void AsyncUnitCmd::CallDestructor() { this->~AsyncUnitCmd(); }
+
+bool AsyncUnitCmd::Stage2() {
+    bool result = !mStage2 || (mStage2)(mUnit, mCmdData, &mReplyAddress);
+    return result;
+}
+
+bool AsyncUnitCmd::Stage3() {
+    // Check whether the owning Graph has been removed in the meantime. If yes, we pass
+    // nullptr as the Unit pointer so that the stage function can detect and properly
+    // handle the situation. For example, it may still have to release resources on stage4.
+    mAlive = Graph_HasParent(mUnit->mParent);
+    bool result = !mStage3 || (mStage3)(mAlive ? mUnit : nullptr, mCmdData, &mReplyAddress);
+    // Only send completition message if the Graph is still alive!
+    if (result && mAlive)
+        SEND_COMPLETION_MSG;
+    return result;
+}
+
+void AsyncUnitCmd::Stage4() {
+    bool result = !mStage4 || (mStage4)(mUnit, mCmdData, &mReplyAddress);
+    // Only send /done message if the Graph has been alive in stage3.
+    if (result && mAlive && mCmdName && mReplyAddress.mReplyFunc != null_reply_func)
+        SendDone(mCmdName);
 }

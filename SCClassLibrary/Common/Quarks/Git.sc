@@ -1,5 +1,5 @@
 Git {
-	var <>localPath, >url, tag, sha, remoteLatest, tags;
+	var <>localPath, >url, tag, sha, remoteLatest, defaultBranchName, tags;
 	classvar gitIsInstalled;
 
 	*isGit { |localPath|
@@ -11,20 +11,21 @@ Git {
 	clone { |url|
 		this.git([
 			"clone",
+			"--quiet", // suppresses progress report on stderr
 			url,
 			thisProcess.platform.formatPathForCmdLine(localPath)
 		], false);
 		this.url = url;
 	}
 	pull {
-		this.git(["pull", "origin", "master"])
+		this.git(["pull", "--quiet", "origin", this.defaultBranchName ? ""])
 	}
 	checkout { |refspec|
-		this.git(["checkout", refspec])
+		this.git(["checkout", "--quiet", refspec])
 	}
 	fetch {
 		tags = remoteLatest = nil;
-		this.git(["fetch"]);
+		this.git(["fetch", "--quiet"]);
 	}
 	isDirty {
 		^this.git(["--no-pager diff HEAD --"]).size != 0
@@ -40,8 +41,8 @@ Git {
 	}
 	remote {
 		// detect origin of repo or nil
-		// origin	git://github.com/supercollider-quarks/MathLib (fetch)
-		// origin	git://github.com/supercollider-quarks/MathLib (push)
+		// origin	https://github.com/supercollider-quarks/MathLib (fetch)
+		// origin	https://github.com/supercollider-quarks/MathLib (push)
 		// problem: if more than one remote then this will just detect the first
 		// should favor 'origin' if more than one
 		var out = this.git(["remote -v"]),
@@ -88,10 +89,16 @@ Git {
 			sha = this.git(["rev-parse HEAD"]);
 		}
 	}
+	defaultBranchName {
+		//find out what the remote default branch name is (ie master or main)
+		^defaultBranchName ?? {
+			defaultBranchName = this.git(["symbolic-ref refs/remotes/origin/HEAD --short"]).split($/)[1]
+		}
+	}
 	remoteLatest {
 		// find what the latest commit on the remote is
 		^remoteLatest ?? {
-			remoteLatest = this.git(["rev-parse origin/master"]);
+			remoteLatest = this.git(["rev-parse origin" +/+ ( this.defaultBranchName ? "" )]);
 		}
 	}
 	tags {
@@ -142,7 +149,7 @@ Git {
 			Pipe.callSync(gitFind, {
 				gitIsInstalled = true;
 			}, { arg error;
-				"Quarks requires git to be installed".error;
+				"Quarks requires git to be installed. Follow the installation instructions at <https://git-scm.com>.".error;
 				gitIsInstalled = false;
 			});
 		};

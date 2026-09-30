@@ -134,6 +134,10 @@ Array[slot] : ArrayedCollection {
 		_ArrayContainsSeqColl
 		^this.primitiveFailed
 	}
+	hungarianSolve {
+		_ArrayHungarianSolve
+		^this.primitiveFailed
+	}
 
 	//************** inconsistent argnames, see SequenceableColllection unlace!
 	unlace { arg clumpSize=2, numChan=1, clip=false;
@@ -290,15 +294,15 @@ Array[slot] : ArrayedCollection {
 
 	printOn { arg stream;
 		if (stream.atLimit, { ^this });
-		stream << "[ " ;
+		stream << "[" ;
 		this.printItemsOn(stream);
-		stream << " ]" ;
+		stream << "]" ;
 	}
 	storeOn { arg stream;
 		if (stream.atLimit, { ^this });
-		stream << "[ " ;
+		stream << "[" ;
 		this.storeItemsOn(stream);
-		stream << " ]" ;
+		stream << "]" ;
 	}
 	prUnarchive { arg slotArray;
 		slotArray.pairsDo {|index, slots| this[index].setSlots(slots) };

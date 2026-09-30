@@ -124,10 +124,9 @@ static int FFTBase_Ctor(FFTBase* unit, int frmsizinput) {
         Print("FFTBase_Ctor error: audio frame size (%i) not a power of two.\n", unit->m_audiosize);
         return 0;
     } else if (unit->m_audiosize < SC_FFT_MINSIZE
-               || (((int)(unit->m_audiosize / unit->mWorld->mFullRate.mBufLength)) * unit->mWorld->mFullRate.mBufLength
-                   != unit->m_audiosize)) {
+               || (((int)(unit->m_audiosize / FULLBUFLENGTH)) * FULLBUFLENGTH != unit->m_audiosize)) {
         Print("FFTBase_Ctor error: audio frame size (%i) not a multiple of the block size (%i).\n", unit->m_audiosize,
-              unit->mWorld->mFullRate.mBufLength);
+              FULLBUFLENGTH);
         return 0;
     }
 
@@ -143,38 +142,35 @@ static int FFTBase_Ctor(FFTBase* unit, int frmsizinput) {
 void FFT_Ctor(FFT* unit) {
     int winType = sc_clip((int)ZIN0(3), -1, 1); // wintype may be used by the base ctor
     unit->m_wintype = winType;
+    // These zeroes are to prevent the dtor freeing things that don't exist:
+    unit->m_inbuf = nullptr;
+    unit->m_scfft = nullptr;
     if (!FFTBase_Ctor(unit, 5)) {
         SETCALC(FFT_ClearUnitOutputs);
-        // These zeroes are to prevent the dtor freeing things that don't exist:
-        unit->m_inbuf = nullptr;
-        unit->m_scfft = nullptr;
         return;
     }
     int audiosize = unit->m_audiosize * sizeof(float);
 
     int hopsize = (int)(sc_max(sc_min(ZIN0(2), 1.f), 0.f) * unit->m_audiosize);
-    if (hopsize < unit->mWorld->mFullRate.mBufLength) {
+    if (hopsize < FULLBUFLENGTH) {
         Print("FFT_Ctor: hopsize smaller than SC's block size (%i) - automatically corrected.\n", hopsize,
-              unit->mWorld->mFullRate.mBufLength);
-        hopsize = unit->mWorld->mFullRate.mBufLength;
-    } else if (((int)(hopsize / unit->mWorld->mFullRate.mBufLength)) * unit->mWorld->mFullRate.mBufLength != hopsize) {
+              FULLBUFLENGTH);
+        hopsize = FULLBUFLENGTH;
+    } else if (((int)(hopsize / FULLBUFLENGTH)) * FULLBUFLENGTH != hopsize) {
         Print("FFT_Ctor: hopsize (%i) not an exact multiple of SC's block size (%i) - automatically corrected.\n",
-              hopsize, unit->mWorld->mFullRate.mBufLength);
-        hopsize = ((int)(hopsize / unit->mWorld->mFullRate.mBufLength)) * unit->mWorld->mFullRate.mBufLength;
+              hopsize, FULLBUFLENGTH);
+        hopsize = ((int)(hopsize / FULLBUFLENGTH)) * FULLBUFLENGTH;
     }
     unit->m_hopsize = hopsize;
     unit->m_shuntsize = unit->m_audiosize - hopsize;
 
     unit->m_inbuf = (float*)RTAlloc(unit->mWorld, audiosize);
+    ClearFFTUnitIfMemFailed(unit->m_inbuf);
 
     SCWorld_Allocator alloc(ft, unit->mWorld);
     unit->m_scfft = scfft_create(unit->m_fullbufsize, unit->m_audiosize, (SCFFT_WindowFunction)unit->m_wintype,
                                  unit->m_inbuf, unit->m_fftsndbuf->data, kForward, alloc);
-
-    if (!unit->m_scfft) {
-        SETCALC(*ClearUnitOutputs);
-        return;
-    }
+    ClearFFTUnitIfMemFailed(unit->m_scfft);
 
     memset(unit->m_inbuf, 0, audiosize);
 
@@ -182,7 +178,7 @@ void FFT_Ctor(FFT* unit) {
     //	unit->m_hopsize, unit->m_shuntsize, unit->m_bufsize, unit->m_wintype);
 
     if (INRATE(1) == calc_FullRate) {
-        unit->m_numSamples = unit->mWorld->mFullRate.mBufLength;
+        unit->m_numSamples = FULLBUFLENGTH;
     } else {
         unit->m_numSamples = 1;
     }
@@ -199,9 +195,6 @@ void FFT_Dtor(FFT* unit) {
         RTFree(unit->mWorld, unit->m_inbuf);
 }
 
-// Ordinary ClearUnitOutputs outputs zero, potentially telling the IFFT (+ PV UGens) to act on buffer zero, so let's
-// skip that:
-void FFT_ClearUnitOutputs(FFT* unit, int wrongNumSamples) { ZOUT0(0) = -1; }
 
 void FFT_next(FFT* unit, int wrongNumSamples) {
     float* in = IN(1);
@@ -240,33 +233,30 @@ void FFT_next(FFT* unit, int wrongNumSamples) {
 void IFFT_Ctor(IFFT* unit) {
     int winType = sc_clip((int)ZIN0(1), -1, 1); // wintype may be used by the base ctor
     unit->m_wintype = winType;
+    // These zeroes are to prevent the dtor freeing things that don't exist:
+    unit->m_olabuf = nullptr;
+    unit->m_scfft = nullptr;
 
     if (!FFTBase_Ctor(unit, 2)) {
         SETCALC(*ClearUnitOutputs);
-        // These zeroes are to prevent the dtor freeing things that don't exist:
-        unit->m_olabuf = nullptr;
         return;
     }
 
     // This will hold the transformed and progressively overlap-added data ready for outputting.
     unit->m_olabuf = (float*)RTAlloc(unit->mWorld, unit->m_audiosize * sizeof(float));
+    ClearUnitIfMemFailed(unit->m_olabuf);
     memset(unit->m_olabuf, 0, unit->m_audiosize * sizeof(float));
 
     SCWorld_Allocator alloc(ft, unit->mWorld);
     unit->m_scfft = scfft_create(unit->m_fullbufsize, unit->m_audiosize, (SCFFT_WindowFunction)unit->m_wintype,
                                  unit->m_fftsndbuf->data, unit->m_fftsndbuf->data, kBackward, alloc);
-
-    if (!unit->m_scfft) {
-        SETCALC(*ClearUnitOutputs);
-        unit->m_olabuf = nullptr;
-        return;
-    }
+    ClearUnitIfMemFailed(unit->m_scfft);
 
     // "pos" will be reset to zero when each frame comes in. Until then, the following ensures silent output at first:
     unit->m_pos = 0; // unit->m_audiosize;
 
     if (unit->mCalcRate == calc_FullRate) {
-        unit->m_numSamples = unit->mWorld->mFullRate.mBufLength;
+        unit->m_numSamples = FULLBUFLENGTH;
     } else {
         unit->m_numSamples = 1;
     }
@@ -375,7 +365,7 @@ void FFTTrigger_Ctor(FFTTrigger* unit) {
     unit->m_fftbufnum = bufnum;
     unit->m_fullbufsize = buf->samples;
 
-    int numSamples = unit->mWorld->mFullRate.mBufLength;
+    int numSamples = FULLBUFLENGTH;
     float dataHopSize = IN0(1);
     unit->m_numPeriods = unit->m_periodsRemain = (int)(((float)unit->m_fullbufsize * dataHopSize) / numSamples) - 1;
 

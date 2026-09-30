@@ -126,28 +126,28 @@ Event : Environment {
 		var max, itemsPerLinem1, i=0;
 		itemsPerLinem1 = itemsPerLine - 1;
 		max = this.size;
-		stream << "( ";
+		stream << "(";
 		this.keysValuesDo({ arg key, val;
 			stream <<< key << ": " << val;
 			if ((i=i+1) < max, { stream.comma.space;
 				if (i % itemsPerLine == itemsPerLinem1, { stream.nl.space.space });
 			});
 		});
-		stream << " )";
+		stream << ")";
 	}
 
 	storeOn { arg stream, itemsPerLine = 5;
 		var max, itemsPerLinem1, i=0;
 		itemsPerLinem1 = itemsPerLine - 1;
 		max = this.size;
-		stream << "( ";
+		stream << "(";
 		this.keysValuesDo({ arg key, val;
 			stream <<< key << ": " <<< val;
 			if ((i=i+1) < max, { stream.comma.space;
 				if (i % itemsPerLine == itemsPerLinem1, { stream.nl.space.space });
 			});
 		});
-		stream << " )";
+		stream << ")";
 		if(proto.notNil) { stream << "\n.proto_(" <<< proto << ")" };
 		if(parent.notNil) { stream << "\n.parent_(" <<< parent << ")" };
 	}
@@ -426,9 +426,9 @@ Event : Environment {
 					ev.sendOSC([23, group, ev[\id]]);
 					ev[\group] = group; ev[\addAction] = 1;
 				},
-				isPlaying: #{ |ev| ^(ev[\isPlaying] == true) },
+				isPlaying: #{ |ev| (ev[\isPlaying] == true) },
 				isPlaying_: #{ | ev, flag | ev[\isPlaying] = flag; },
-				nodeID: #{ |ev| ^ev[\id].asArray.last },
+				nodeID: #{ |ev| ev[\id].asArray.last },
 
 
 				asEventStreamPlayer: #{|ev| ev }
@@ -612,9 +612,7 @@ Event : Environment {
 						// msgFunc gets the synth's control values from the Event
 						instr = ( ~synthLib ?? { SynthDescLib.global } ).at(~instrument);
 						if(instr.isNil) {
-							"Event: instrument % not found in SynthDescLib"
-							.format(~instrument).warn;
-							^this
+							Error("Event: instrument % not found in SynthDescLib".format(~instrument)).throw
 						};
 						msgFunc = instr.msgFunc;
 						instrumentName = ~synthDefName.valueEnvir;

@@ -23,6 +23,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+#include "ClassLibraryInfo.hpp"
 #include "SCBase.h"
 #include "VMGlobals.h"
 #include "PyrSymbolTable.h"
@@ -57,8 +58,6 @@ PyrSymbol* s_midiSMPTEAction;
 
 const int kMaxMidiPorts = 128;
 bool gMIDIInitialized = false;
-
-extern bool compiledOK;
 
 // =====================================================================
 // Platform declarations (interface routines)
@@ -163,6 +162,8 @@ static inline void SC_AlsaParseUID(int uid, int& clientID, int& portID) {
     portID = uid & 0xFFFF;
 }
 
+extern ClassLibraryInfo gClassLibraryInfo;
+
 void SC_AlsaMidiClient::processEvent(snd_seq_event_t* evt) {
     int status = lockLanguageOrQuit(mShouldBeRunning);
     if (status == EINTR)
@@ -172,7 +173,7 @@ void SC_AlsaMidiClient::processEvent(snd_seq_event_t* evt) {
         return;
     }
 
-    if (compiledOK) {
+    if (gClassLibraryInfo.acceptsInput()) {
         VMGlobals* g = gMainVMGlobals;
         PyrInt8Array* sysexArray;
 
@@ -278,14 +279,18 @@ void SC_AlsaMidiClient::processEvent(snd_seq_event_t* evt) {
             break;
         case SND_SEQ_EVENT_SONGPOS: // song ptr
             ++g->sp;
-            SetInt(g->sp, evt->data.control.channel);
+            SetInt(g->sp, 0x2);
             ++g->sp;
-            SetInt(g->sp, (evt->data.control.value << 7) | evt->data.control.param);
+            // note: this differs from the corresponding sections
+            // of SC_CoreMIDI.cpp and SC_PortMIDI.cpp.
+            // Empirically I found that data.control.value has already been
+            // decoded from the two 7-bit values -- the bitwise ops are not necessary here
+            SetInt(g->sp, evt->data.control.value);
             runInterpreter(g, s_midiSysrtAction, 4);
             break;
         case SND_SEQ_EVENT_SONGSEL: // song sel
             ++g->sp;
-            SetInt(g->sp, evt->data.control.channel);
+            SetInt(g->sp, 0x3);
             ++g->sp;
             SetInt(g->sp, evt->data.control.param);
             runInterpreter(g, s_midiSysrtAction, 4);
@@ -493,14 +498,14 @@ int SC_AlsaMidiClient::sendEvent(int outputIndex, int uid, snd_seq_event_t* evt,
         snd_seq_ev_set_dest(evt, cid, pid);
     }
 
-    // 	long latelong;
+    // 	std::int64_t latelong;
     if (late > 0.f) {
-        // 		latelong = (long) (late * 1000000000);
+        // 		latelong = (std::int64_t) (late * 1000000000);
         // new time calculation. The old one was not correct
-        // 		time.tv_sec = (long)(latelong / 1000000000); // seconds
-        // 		time.tv_nsec = (long)(latelong % 1000000000); // nanoseconds
-        time.tv_sec = (long)(floorf(late));
-        time.tv_nsec = (long)((late - time.tv_sec) * 1e9f);
+        // 		time.tv_sec = (std::int64_t)(latelong / 1000000000); // seconds
+        // 		time.tv_nsec = (std::int64_t)(latelong % 1000000000); // nanoseconds
+        time.tv_sec = (std::int64_t)(floorf(late));
+        time.tv_nsec = (std::int64_t)((late - time.tv_sec) * 1e9f);
     } else {
         time.tv_sec = time.tv_nsec = 0;
     }

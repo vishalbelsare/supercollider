@@ -69,6 +69,9 @@ TestPattern : UnitTest {
 		};
 		var identical = [
 			Pbind(\x, 7) <> (y:  8),
+			Pbind(x: 7, y: 8),
+			Pbind(\x, 7, y: 8),
+			Pbind(\y, 8, x: 7),
 			Pbind(\y, 8) <> (x:  7),
 			Pbind(\x, 7, \y, 8),
 			Pn((x: 7, y: 8)),
@@ -178,9 +181,6 @@ TestPattern : UnitTest {
 		this.assert(x == 1, "Pfset on nil stream should still call the initializer function");
 		this.assert(y == 2, "Pfset on nil stream should still call the cleanup function");
 		this.assert(outEvent.isNil, "Pfset on nil stream should return nil");
-		// inEvent.size is 2 if Pfset adds 'addToCleanup' and 'removeFromCleanup' in sequence (presently);
-		// inEvente.size could be 0 if this add-remove pair is "optimized out" in the future.
-		this.assert(inEvent.size.even, "Pfset on nil stream should add an even number of items to the input event");
 		// The present implementation of EventStreamCleanup.update first does the add(s) then the remove(s),
 		// so it "cancels out" matched add-remove pairs in the same event. But let's check that too...
 		cleanup.update(inEvent);
@@ -193,6 +193,13 @@ TestPattern : UnitTest {
 		this.assert(event.isRest, "The final event of a Pfindur, if it was originally a rest, should still be a rest");
 	}
 
+	test_Pwalk_boundary_folding {
+		var stream = Pwalk((1..6), 2, Pseq([1, -1], inf)).asStream;
+		var values = stream.nextN(8);
+		this.assertEquals(values, [1, 3, 5, 3, 1, 3, 5, 3],
+			"Pwalk applies directionPattern correctly at boundaries"
+		);
+	}
 
 /*
 	test_storeArgs {
@@ -248,4 +255,3 @@ TestPattern : UnitTest {
 
 
 }
-

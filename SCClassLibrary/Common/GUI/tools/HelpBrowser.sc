@@ -2,6 +2,12 @@ HelpBrowser {
 	classvar singleton;
 	classvar <>defaultHomeUrl;
 	classvar <>openNewWindows = false;
+	classvar <>scrollStep = 40;
+	classvar <>scrollPageStep = 350;
+
+	// redirect link addresses that match redirectPattern to default system browser
+	classvar <>redirectEnabled = true;
+	classvar <>redirectPattern = "^http";
 
 	var <>homeUrl;
 	var <window;
@@ -34,12 +40,39 @@ HelpBrowser {
 		^super.new.init( aHomeUrl ? defaultHomeUrl, newWin ?? { openNewWindows } );
 	}
 
-	*goTo {|url|
+	*prShouldRedirect {|url|
+		^(redirectEnabled and: { redirectPattern.matchRegexp(url) })
+	}
+
+	*prOpenRedirectMenu { |url, useSCIDE|
+		var info = MenuAction("Choose how to open external link:").enabled_(false);
+		var domain = MenuAction(if(url.size < 75) {url} {url.replaceRegexp("https?:\/\/|(/.*)", "")} ).enabled_(false);
+		var separator = MenuAction().separator_(true);
+		var systemDefaultBrowser = MenuAction("Open in system default browser");
+		var helpBrowser = MenuAction("Open in SuperCollider's help browser (unsafe)");
+		var closeMenu = MenuAction("Cancel");
+		var menu = Menu(info, domain, separator, systemDefaultBrowser, helpBrowser, closeMenu);
+		var removeDependants = { [systemDefaultBrowser, helpBrowser, closeMenu].do(_.removeDependant)  };
+		systemDefaultBrowser.addDependant { |action, what| if (what == \triggered) { url.openOS; removeDependants.() } };
+		helpBrowser.addDependant { |action, what| if (what == \triggered) { this.prOpenInIDEorHelpBrowser(url, useSCIDE); removeDependants.() } };
+		^menu.front;
+	}
+
+	*prOpenInIDEorHelpBrowser { | url, useSCIDE(true) |
+		// when useSCIDE = false, will open in a HelpBrowser instance.
 		var ideClass = \ScIDE.asClass;
-		if ( ideClass.notNil ) {
-			ideClass.openHelpUrl(url);
-		}{
-			this.front.goTo(url);
+		if(ideClass.notNil and: useSCIDE) {
+			ideClass.openHelpUrl(url)
+		} {
+			this.front.goTo(url)
+		}
+	}
+
+	*goTo {|url|
+		if(this.prShouldRedirect(url)) {
+			this.prOpenRedirectMenu(url)
+		} {
+			this.prOpenInIDEorHelpBrowser(url)
 		}
 	}
 
@@ -119,6 +152,10 @@ HelpBrowser {
 
 	goForward { webView.forward; }
 
+	goDown { webView.scrollDown(HelpBrowser.scrollStep); }
+
+	goUp { webView.scrollUp(HelpBrowser.scrollStep); }
+
 /* ------------------------------ private ------------------------------ */
 
 	init { arg aHomeUrl, aNewWin;
@@ -131,6 +168,7 @@ HelpBrowser {
 		var x, y, w, h;
 		var str;
 
+		if (not(openNewWindows)) { singleton = this };
 		homeUrl = aHomeUrl;
 
 		winRect = Rect(0, 0, 800, (Window.screenBounds.height * 0.8).floor);
@@ -233,18 +271,21 @@ HelpBrowser {
 		webView.onLoadFailed = { this.stopAnim };
 
 		webView.onLinkActivated = {|wv, url|
-			var redirected, newPath, oldPath;
-			redirected = this.redirectTextFile(url);
-			if (not(redirected)) {
-				#newPath, oldPath = [url,webView.url].collect {|x|
-					if(x.notEmpty) {x.findRegexp("(^\\w+://)?([^#]+)(#.*)?")[1..].flop[1][1]}
-				};
-
-				if(newPath != oldPath && openNewWin) {
-						HelpBrowser.new(newWin:openNewWin).goTo(url);
+			var newPath, oldPath;
+			if( not(this.redirectTextFile(url)) ) {
+				if( HelpBrowser.prShouldRedirect(url)) {
+					HelpBrowser.prOpenRedirectMenu(url, useSCIDE: false);
 				} {
-					this.goTo(url);
-				};
+					#newPath, oldPath = [url,webView.url].collect {|x|
+					if(x.notEmpty) {x.findRegexp("(^\\w+://)?([^#]+)(#.*)?")[1..].flop[1][1]}
+					};
+			
+					if(newPath != oldPath && openNewWin) {
+							HelpBrowser.new(newWin:openNewWin).goTo(url);
+					} {
+						this.goTo(url);
+					}
+				}
 			}
 		};
 
@@ -272,8 +313,12 @@ HelpBrowser {
 
 		webView.enterInterpretsSelection = true;
 
+		webView.setAttribute(\javascriptCanAccessClipboard, true);
+
 		window.view.keyDownAction = { arg view, char, mods, uni, kcode, key;
-			var keyPlus, keyZero, keyMinus, keyEquals, keyF;
+			var keyPlus, keyZero, keyMinus, keyEquals, keySlash;
+			var keyD, keyU, keyF, keyG, keyH, keyJ, keyK, keyL, keyT;
+			var keyF3, keyF5, keyLeftArrow, keyRightArrow;
 			var modifier, zoomIn;
 
 			modifier = Platform.case(\osx, {
@@ -282,34 +327,72 @@ HelpBrowser {
 				mods.isCtrl && mods.isCmd.not && mods.isAlt.not;
 			});
 
-			#keyPlus, keyZero, keyMinus, keyEquals, keyF = [43, 48, 45, 61, 70];
+			#keyPlus, keyZero, keyMinus, keyEquals, keySlash = [43, 48, 45, 61, 47];
+			#keyD, keyF, keyG, keyH, keyJ, keyK, keyL, keyT, keyU = [68, 70, 71, 72, 74, 75, 76, 84, 85];
+			#keyF3, keyF5 = [65472, 65474];
+			#keyLeftArrow, keyRightArrow = [65361, 65363];
 
 			// +/= has the same value on macOS when pressed with <Cmd>
-			zoomIn = Platform.case(\osx, {
-				(key == keyEquals) && modifier;
-			}, {
-				(key == keyPlus) && modifier;
-			});
+			zoomIn = ((key == keyEquals) && modifier) || ((key == keyK) && mods.isShift);
 
-			if (zoomIn) {
-				webView.zoom = min(webView.zoom + 0.1, 2.0);
-			};
-
-			if ((key == keyMinus) && modifier) {
-				webView.zoom = max(webView.zoom - 0.1, 0.1);
-			};
-
-			if ((key == keyZero) && modifier) {
-				webView.zoom = 1.0;
-			};
-
-			if ((key == keyF) && modifier) {
-				toggleFind.value;
-			};
-
-			if (char.ascii == 27) { // Esc
-				if (findView.visible) { toggleFind.value };
-			};
+			case(
+				{ zoomIn }, {
+					webView.zoom = min(webView.zoom + 0.1, 2.0);
+				},
+				{ (key == keyMinus) && modifier }, {
+					webView.zoom = max(webView.zoom - 0.1, 0.1)
+				},
+				{ (key == keyZero) && modifier }, {
+					webView.zoom = 1.0
+				},
+				{ (key == keyF && modifier) || (key == keySlash) }, {
+					toggleFind.value
+				},
+				{ key == keyG }, {
+					if (mods.isShift) {
+						webView.scrollPosition_(0@(webView.contentsSize.height - webView.bounds.height))
+					} {
+						webView.scrollPosition_(0@0)
+					}
+				},
+				{ key == keyD && mods.isCtrl }, {
+					webView.scrollDown(HelpBrowser.scrollPageStep)
+				},
+				{ key == keyU && mods.isCtrl }, {
+					webView.scrollUp(HelpBrowser.scrollPageStep)
+				},
+				{ key == keyJ }, {
+					if (mods.asBoolean.not) {
+						this.goDown
+					};
+					if (mods.isShift) {
+						webView.zoom = max(webView.zoom - 0.1, 0.1)
+					};
+				},
+				{ key == keyK }, {
+					if (mods.asBoolean.not) {
+						this.goUp
+					};
+				},
+				{ (key == keyH) || ((kcode == keyLeftArrow) && mods.isAlt) }, {
+					this.goBack
+				},
+				{ (key == keyL) || ((kcode == keyRightArrow) && mods.isAlt) }, {
+					this.goForward
+				},
+				{ key == keyT }, {
+					webView.runJavaScript("$(\"#toc\").toggle();$(\"#toc_search\").focus();");
+				},
+				{ kcode == keyF5 }, {
+					this.goTo(webView.url)
+				},
+				{ kcode == keyF3 }, {
+					this.goTo(SCDoc.helpTargetUrl++"/Search.html");
+				},
+				{ (char.ascii == 27) && findView.visible }, {
+					toggleFind.value
+				}
+			);
 		};
 
 		toolbar[\Back].action = { this.goBack };

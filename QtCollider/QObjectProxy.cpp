@@ -19,7 +19,6 @@
  *
  ************************************************************************/
 
-#include <QDebug>
 
 #include "QObjectProxy.h"
 #include "QcApplication.h"
@@ -38,7 +37,7 @@
 
 #if defined _WIN32
 #    include "SC_Win32Utils.h"
-#elif defined __FreeBSD__
+#elif defined __FreeBSD__ || defined __OpenBSD__
 #    include <stdlib.h>
 #else
 #    include <alloca.h>
@@ -87,7 +86,11 @@ static bool serializeSignature(QVarLengthArray<char, 512>& dst, const char* meth
     int i;
     for (i = 0; i < argc; ++i) {
         int typeId = argv[i].type()->id();
+#if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
         const char* typeName = QMetaType::typeName(typeId);
+#else
+        const char* typeName = QMetaType(typeId).name();
+#endif
         int len = qstrlen(typeName);
         if (len <= 0) {
             qcErrorMsg("Could not get argument type name.");
@@ -169,7 +172,11 @@ bool QObjectProxy::invokeMethod(const char* method, PyrSlot* retSlot, PyrSlot* a
     // construct the return data object
     QGenericReturnArgument rarg;
     const char* rtype_name = mm.typeName();
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     int rtype_id = QMetaType::type(rtype_name);
+#else
+    int rtype_id = QMetaType::fromName(rtype_name).id();
+#endif
 
     MetaValue returnVal;
 

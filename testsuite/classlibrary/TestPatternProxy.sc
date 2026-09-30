@@ -129,7 +129,7 @@ TestPatternProxy : UnitTest {
 
 	test_update {
 		var assert = { |what, which|
-			this.assert(what, "testing '%' failed.".format(which), false)
+			this.assert(what, "Test named '%' failed.".format(which), false)
 		};
 
 		Pdefn.clear;
@@ -190,7 +190,7 @@ TestPatternProxy : UnitTest {
 		var assert = { |a, b, which|
 			//a = a.collect(removeCleanup);
 			//b = b.collect(removeCleanup);
-			this.assert(a == b, "testing '%' failed.".format(which), false)
+			this.assertEquals(a, b, "Test named '%' failed. The following two should be equal:\n%\n%".format(which, a, b), false)
 		};
 
 
@@ -316,6 +316,25 @@ TestPatternProxy : UnitTest {
 
 		Pdefn.clear;
 
+		Pdef.clear;
+		Pdef(\p, Pbind(\a, 4, \b, Pkey(\c)));
+		Pbindef(\p, \b, Pkey(\a));
+		assert.(
+			Pbindef(\p).asStream.nextN(1, ()),
+			[(a:4, b: 4)],
+			5.5
+		);
+
+		Pdef.clear;
+		Pbindef(\p, \a, 4, \b, Pkey(\c));
+		Pbindef(\p, \b, Pkey(\a));
+		assert.(
+			Pbindef(\p).asStream.nextN(1, ()),
+			[(a:4, b: 4)],
+			5.6
+		);
+
+
 		Pdefn(\x, 9);
 		Pdefn(\y, Pseq([1, 2, 3]));
 		Pdefn(\z, Pdefn(\x) + Pdefn(\y));
@@ -365,5 +384,48 @@ TestPatternProxy : UnitTest {
 
 
 
+	}
+
+	test_time_precision {
+		var clock = TempoClock.new(25);
+		var cond = Condition.new;
+		var controller;
+		var degrees = [];
+		var beats = [];
+		Pdef.clear;
+
+		{
+			// Test for note duplication when redefining the source of a playing Pdef (PR #5891)
+			var finish = Pfunc{ |ev| ev.use{ degrees = degrees ++ ~degree }; 1 };
+			Pdef(\a).clock_(clock).quant_(1).play(clock);
+			controller = SimpleController(Pdef(\a).player).put(\stopped, { cond.unhang; });
+			Pdef(\a).source = Pbind(\degree, Pseq((1..14), inf), \dur, 1/7, \finish, finish);
+			(clock.timeToNextBeat + 0.86).wait;
+			Pdef(\a).source = Pbind(\degree, Pseq((1..15), inf), \dur, 1/5, \finish, finish);
+			(clock.timeToNextBeat + 0.82).wait;
+			Pdef(\a).source = Pbind(\degree, Pseq((1..21), inf), \dur, 1/7, \finish, finish);
+			(clock.timeToNextBeat + 1.86).wait;
+			Pdef(\a).source = Pbind(\degree, Pseq((1..3), 1), \dur, 1/3, \finish, finish);
+		}.fork(clock, quant: 1);
+		cond.hang;
+		this.assert(degrees == ((1..7) ++ (1..5) ++ (1..14) ++ (1..3)), "1.1", false);
+
+		{
+			// Test for time imprecision issues (when playing "triplets" should end exactly on a beat)
+			Pdef(\t, Pbind(
+				\t, Pfunc{ beats = beats ++ thisThread.clock.beatInBar },
+				\dur, Pseq([
+					Pseq([1], 4),
+					Pseq([4/3], 3)
+				])
+			)).play(clock, quant: -1);
+			controller = SimpleController(Pdef(\t).player).put(\stopped, { cond.unhang; });
+		}.fork(clock, quant: 1);
+		cond.hang;
+		this.assert(beats.collect{ |beat, i| [0, 1, 2, 3, 0, 4/3, 8/3, 0][i].equalWithPrecision(beat, 1e-12) }.reduce('and'),
+			"1.2", false);
+		this.assert(beats.last === 0.0, "1.3", false);
+
+		Pdef.clear;
 	}
 }

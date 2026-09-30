@@ -88,12 +88,13 @@ private:
  *
  * */
 struct thread_init_functor {
-    thread_init_functor(bool real_time): rt(real_time) {}
+    thread_init_functor(bool real_time, bool pin_threads): rt(real_time), pin(pin_threads) {}
 
     void operator()(int thread_index);
 
 private:
     const bool rt;
+    const bool pin;
 };
 
 struct io_thread_init_functor {
@@ -122,6 +123,8 @@ class nova_server : public asynchronous_log_thread,
 public:
     SC_TimeDLL mDLL;
     bool use_system_clock;
+    bool non_rt;
+    bool pin_threads;
     double smooth_samplerate;
 
     typedef detail::audio_backend audio_backend;
@@ -245,13 +248,6 @@ inline void run_scheduler_tick(void) {
     }
 }
 
-inline bool log_printf(const char* fmt, ...) {
-    va_list vargs;
-    va_start(vargs, fmt);
-    return instance->log_printf(fmt, vargs);
-}
-
-
 inline void realtime_engine_functor::sync_clock(void) {
     if (instance->use_system_clock) {
         double nows = (uint64)(OSCTime(std::chrono::system_clock::now())) * kOSCtoSecs;
@@ -293,9 +289,34 @@ inline void realtime_engine_functor::run_tick(void) {
         instance->increment_logical_time();
 }
 
+inline bool log(const char* string) {
+    if (instance->get_error_posting())
+        return instance->log(string);
+    return true;
+}
 
-inline bool log(const char* string) { return instance->log(string); }
+inline bool log(const char* string, size_t length) {
+    if (instance->get_error_posting())
+        return instance->log(string, length);
+    return true;
+}
 
-inline bool log(const char* string, size_t length) { return instance->log(string, length); }
+inline bool log_printf(const char* fmt, ...) {
+    if (instance->get_error_posting()) {
+        va_list vargs;
+        va_start(vargs, fmt);
+        auto result = instance->log_printf(fmt, vargs);
+        va_end(vargs);
+        return result;
+    }
+    return true;
+}
+
+inline bool log_printf(const char* fmt, va_list vargs) {
+    if (instance->get_error_posting()) {
+        return instance->log_printf(fmt, vargs);
+    }
+    return true;
+}
 
 } /* namespace nova */

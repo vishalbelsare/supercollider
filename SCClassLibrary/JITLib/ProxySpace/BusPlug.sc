@@ -101,6 +101,10 @@ BusPlug : AbstractFunction {
 		^this.value(nil)
 	}
 
+	asAudioRateInput {
+		^this.ar
+	}
+
 
 	//  math support
 
@@ -251,10 +255,9 @@ BusPlug : AbstractFunction {
 
 	play { | out, numChannels, group, multi=false, vol, fadeTime, addAction |
 		var bundle = MixedBundle.new;
-		if(this.homeServer.serverRunning.not) {
-			("server not running:" + this.homeServer).warn;
-			^this
-		};
+		
+		if(this.homeServer.warnIfNotRunning(thisMethod)) { ^this };
+
 		if(bus.rate == \control) { "Can't monitor a control rate bus.".warn; monitor.stop; ^this };
 		group = group ?? {this.homeServer.defaultGroup};
 		this.playToBundle(bundle, out, numChannels, group, multi, vol, fadeTime, addAction);
@@ -265,10 +268,9 @@ BusPlug : AbstractFunction {
 
 	playN { | outs, amps, ins, vol, fadeTime, group, addAction |
 		var bundle = MixedBundle.new;
-		if(this.homeServer.serverRunning.not) {
-			("server not running:" + this.homeServer).warn;
-			^this
-		};
+
+		if(this.homeServer.warnIfNotRunning(thisMethod)) { ^this };
+
 		if(bus.rate == \control) { "Can't monitor a control rate bus.".warn; monitor.stop; ^this };
 		group = group ?? {this.homeServer.defaultGroup};
 		this.playNToBundle(bundle, outs, amps, ins, vol, fadeTime, group, addAction);
@@ -301,10 +303,10 @@ BusPlug : AbstractFunction {
 		if(this.isNeutral.not) { ^bus.scope(bufsize, zoom) } { "Can't scope unintitialized bus".warn }
 	}
 
-	plot { | duration = 0.01, bounds, minval, maxval, separately = false |
+	plot { | duration = 0.01, bounds, minval, maxval, separately = false, parent |
 		^if(this.isNeutral.not) {
 			this.wakeUp;
-			bus.plot(duration, bounds, minval, maxval, separately);
+			bus.plot(duration, bounds, minval, maxval, separately, parent);
 		} { "Can't plot unintitialized bus".warn; nil }
 	}
 

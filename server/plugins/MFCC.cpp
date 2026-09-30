@@ -3298,7 +3298,7 @@ static float MFCC_prepareMel(MFCC*, float*);
 void MFCC_Ctor(MFCC* unit) {
     // may want to check sampling rate here!
 
-    unit->m_srate = unit->mWorld->mFullRate.mSampleRate;
+    unit->m_srate = FULLRATE;
 
     // if sample rate is 88200 or 96000, assume taking double size FFT to start with
     if (unit->m_srate > (44100.0 * 1.5))
@@ -3320,10 +3320,6 @@ void MFCC_Ctor(MFCC* unit) {
     // fixed for now
     unit->m_numbands = 42;
 
-    unit->m_bands = (float*)RTAlloc(unit->mWorld, unit->m_numbands * sizeof(float));
-
-    Clear(unit->m_numbands, unit->m_bands);
-
     unit->m_numcoefficients = (int)ZIN0(1);
 
     // range checks
@@ -3334,8 +3330,11 @@ void MFCC_Ctor(MFCC* unit) {
         unit->m_numcoefficients = 42;
     }
 
+    unit->m_bands = (float*)RTAlloc(unit->mWorld, unit->m_numbands * sizeof(float));
     unit->m_mfcc = (float*)RTAlloc(unit->mWorld, unit->m_numcoefficients * sizeof(float));
+    ClearUnitIfMemFailed(unit->m_bands && unit->m_mfcc);
 
+    Clear(unit->m_numbands, unit->m_bands);
     Clear(unit->m_numcoefficients, unit->m_mfcc);
     for (int j = 0; j < unit->m_numcoefficients; ++j)
         ZOUT0(j) = 0.f;

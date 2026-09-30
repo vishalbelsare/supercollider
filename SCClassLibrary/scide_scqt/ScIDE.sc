@@ -5,11 +5,33 @@ ScIDE {
 	classvar serverController;
 	classvar volumeController, suppressAmpResponse = false;
 	classvar docRoutine;
+	classvar handshakeCondition;
 
 	*initClass {
 		subListSorter = { | a b | a[0].perform('<', b[0]) };
 
 		Class.initClassTree(Server);
+		Class.initClassTree(SCDoc);
+		Class.initClassTree(PostWindowURLHandler);
+
+		PostWindowURLHandler.register(\scdoc, {|url|
+			var prefix = "scdoc://";
+			ScIDE.openHelpUrl("file://" ++ SCDoc.helpTargetDir +/+ url[prefix.size..])
+		});
+
+		PostWindowURLHandler.register(\file, {|url|
+			var prefix = "file://";
+			var parts = url[prefix.size..].split($:);
+			{ Document.openAtLine(if(parts[0][0] == $/) {parts[0]} {"/" ++ parts[0]}, parts[1] ?? { 0 }, parts[2] ?? [0]) }.fork(AppClock)
+		});
+
+		PostWindowURLHandler.register(\http, {|url|
+			HelpBrowser.goTo(url)
+		});
+
+		PostWindowURLHandler.register(\https, {|url|
+			HelpBrowser.goTo(url)
+		});
 
 		StartUp.add {
 			if (this.connected) {
@@ -24,12 +46,25 @@ ScIDE {
 	}
 
 	*handshake {
-		this.send(\classLibraryRecompiled);
-		this.send(\requestDocumentList);
-		this.send(\requestCurrentPath);
+		fork{
+			handshakeCondition !? { "%: handshakeCondition is not nil!".format(thisMethod.asString).warn };
+			handshakeCondition = CondVar();
 
-		this.defaultServer = Server.default;
-		this.sendIntrospection;
+			this.send(\classLibraryRecompiled);
+			this.send(\requestDocumentList);
+			handshakeCondition.waitFor(5);
+			this.send(\requestCurrentPath);
+			handshakeCondition.waitFor(5);
+
+			this.defaultServer = Server.default;
+			this.sendIntrospection;
+
+			handshakeCondition = nil;
+		}
+	}
+
+	*prSignalHandshakeCond {
+		handshakeCondition !? { handshakeCondition.signalOne };
 	}
 
 	*defaultServer_ {|server|
@@ -197,47 +232,6 @@ ScIDE {
 		if (res.size > 0) { this.send(id, res) };
 	}
 
-	*findMethod { |id, text|
-		var cname, mname, tokens, res;
-		var class, method;
-
-		tokens = text.split($.);
-		if (tokens.size > 1) {
-			cname = tokens[0];
-			mname = tokens[1];
-		}{
-			mname = tokens[0];
-		};
-		if (mname.size < 1) { ^this };
-
-		if (cname.size > 0) {
-			class = cname.asSymbol.asClass;
-			if (class.isNil) {
-				warn("No class named" + cname.asString);
-				^this;
-			};
-			method = class.class.findRespondingMethodFor(mname.asSymbol);
-			if (method.isNil) {
-				warn("No such method:" + cname.asString ++ "." ++ mname.asString);
-				^this;
-			};
-			this.send(id, [this.serializeMethod(method)]);
-		}{
-			res = [];
-			this.allMethodsDo { |method|
-				if (method.name.asString == mname) {
-					res = res.add( this.serializeMethod(method) );
-				};
-			};
-			if (res.size > 0) {
-				this.send(id, res)
-			}{
-				warn("No such method:" + mname.asString);
-				^this;
-			};
-		}
-	}
-
 	*serializeMethod { arg method;
 		var data = [method.ownerClass.name, method.name];
 		if (method.argNames.size > 1) {
@@ -311,6 +305,10 @@ ScIDE {
 		this.processUrl(url, { |processedUrl|
 			this.send("openHelpUrl", processedUrl.asString)
 		});
+	}
+
+	*clearPostWindow {
+		this.send(\clearPostWindow);
 	}
 
 	*cmdPeriod { docRoutine.play(AppClock) }
@@ -389,6 +387,10 @@ ScIDE {
 		this.send(\closeDocument, [quuid]);
 	}
 
+	*save {|quuid, docPath|
+		this.send(\saveDocument, [quuid, docPath]);
+	}
+
 	*setDocumentTitle {|quuid, newTitle|
 		this.send(\setDocumentTitle, [quuid, newTitle]);
 	}
@@ -431,6 +433,10 @@ ScIDE {
 		}
 	}
 
+	currentPath_ { |p|
+		currentPath = p.standardizePath;
+	}
+
 
 	// PRIVATE ///////////////////////////////////////////////////////////
 
@@ -442,6 +448,30 @@ ScIDE {
 	*prConnect {|ideName|
 		_ScIDE_Connect
 		this.primitiveFailed
+	}
+}
+
+PostWindowURLHandler {
+	classvar registered;
+
+	*initClass {
+		Class.initClassTree(IdentityDictionary);
+		registered = IdentityDictionary();
+	}
+
+	*register { |name, fn| registered[name] = fn }
+
+	*new { |scheme, url|
+		var found = registered[scheme.asSymbol];
+		^if(found.isNil){
+			this.prDefault(url)
+		} {
+			found.(url)
+		}
+	}
+
+	*prDefault { |url|
+		"PostWindowURLHandler does not know how to handle the URL '%'".format(url).warn
 	}
 }
 
@@ -480,6 +510,22 @@ Document {
 		};
 		if(doc.notNil, { ^doc.front });
 		doc = super.new.initFromPath(path, selectionStart, selectionLength);
+		if (envir.notNil and: { doc.notNil }) { doc.envir_(envir) };
+		^doc
+	}
+
+	*openAtLine { |path, lineNumber, column, selectionLength, envir|
+		var doc;
+		path = this.standardizePath(path);
+		allDocuments.do{ |d|
+			if(d.path == path.absolutePath){
+				doc = d
+			};
+		};
+		if(doc.notNil, {
+			^doc.front
+		});
+		doc = super.new.initFromPathLineColumn(path, lineNumber + column, selectionLength);
 		if (envir.notNil and: { doc.notNil }) { doc.envir_(envir) };
 		^doc
 	}
@@ -524,8 +570,8 @@ Document {
 	*prCurrent_ {|newCurrent|
 		current = this.current;
 		if((newCurrent === current).not, {
-			if(current.notNil, {current.didResignKey});
-			newCurrent.didBecomeKey;
+			current !? { current.didResignKey };
+			newCurrent !? { newCurrent.didBecomeKey };
 		});
 	}
 
@@ -619,6 +665,31 @@ Document {
 		this.prAdd;
 	}
 
+	initFromPathLineColumn { |argpath, line(1), column(0), selectionLength(1)|
+		quuid = ScIDE.getQUuid;
+		this.prReadTextFromFile(argpath);
+		this.propen(argpath, this.prFindIndexOfLineNumber(line) + column, selectionLength);
+		path = argpath;
+		title = path.basename;
+		isEdited = false;
+		this.prAdd;
+	}
+
+	prFindIndexOfLineNumber { |line(1)|
+		var txt = this.getText;
+		var count = 1;
+		txt.do {|c, i|
+			if (count == line){
+				^i
+			} {
+				if (c == $\n) {
+					count = count + 1;
+				}
+			}
+		};
+		^txt.size - 1
+	}
+
 	textChanged {|index, numCharsRemoved, addedChars|
 		addedChars = String.fill(addedChars.size, {|i| addedChars[i].asAscii});
 		textChangedAction.value(this, index, numCharsRemoved, addedChars);
@@ -629,6 +700,14 @@ Document {
 	}
 
 	close { ScIDE.close(quuid); }
+
+	save { |docPath|
+		docPath = docPath ? path;
+		if(docPath.isNil) { MethodError("Document saved requires specified path", this).throw; };
+		// NB Ideally the line below should be replaced by a primitive
+		if(docPath.dirname.pathMatch.size ==  0) { MethodError("Document save failed as directory does not exist.", this).throw };
+		ScIDE.save(quuid, docPath);
+	}
 
 	// asynchronous get
 	// range -1 means to the end of the Document
@@ -790,11 +869,17 @@ Document {
 	}
 
 	prAdd {
+		var savePath;
 		allDocuments = allDocuments.add(this);
 		if (autoRun) {
-			if (this.rangeText(0,7) == "/*RUN*/")
-			{
-				this.text.interpret;
+			if (this.rangeText(0,7) == "/*RUN*/") {
+				savePath = thisProcess.nowExecutingPath;
+				protect {
+					thisProcess.nowExecutingPath = path;
+					this.text.interpret;
+				} {
+					thisProcess.nowExecutingPath = savePath;
+				}
 			}
 		};
 		initAction.value(this);
@@ -807,6 +892,7 @@ Document {
 	selectionStart {
 		^this.prGetSelectionStart(quuid)
 	}
+
 
 	prGetSelectionStart {|id|
 		_ScIDE_GetDocSelectionStart
@@ -829,7 +915,7 @@ Document {
 		^this.rangeText(rangestart, rangesize);
 	}
 
-	string_ { | string, rangestart = -1, rangesize = 1 |
+	string_ { | string, rangestart = 0, rangesize = -1 |
 		this.prSetText(string, nil, rangestart, rangesize);
 	}
 

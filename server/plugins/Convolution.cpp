@@ -119,6 +119,8 @@ void Convolution_Ctor(Convolution* unit) {
     int framesize_f = unit->m_framesize * sizeof(float);
     int fftsize_f = unit->m_fftsize * sizeof(float);
 
+    unit->m_scfft1 = unit->m_scfft2 = unit->m_scfftR = nullptr;
+
     unit->m_inbuf1 = (float*)RTAlloc(unit->mWorld, framesize_f);
     unit->m_inbuf2 = (float*)RTAlloc(unit->mWorld, framesize_f);
     unit->m_fftbuf1 = (float*)RTAlloc(unit->mWorld, fftsize_f);
@@ -126,6 +128,9 @@ void Convolution_Ctor(Convolution* unit) {
 
     unit->m_outbuf = (float*)RTAlloc(unit->mWorld, fftsize_f);
     unit->m_overlapbuf = (float*)RTAlloc(unit->mWorld, framesize_f);
+
+    ClearUnitIfMemFailed(unit->m_inbuf1 && unit->m_inbuf2 && unit->m_fftbuf1 && unit->m_fftbuf2 && unit->m_outbuf
+                         && unit->m_overlapbuf);
 
     memset(unit->m_outbuf, 0, fftsize_f);
     memset(unit->m_overlapbuf, 0, framesize_f);
@@ -139,7 +144,7 @@ void Convolution_Ctor(Convolution* unit) {
         scfft_create(unit->m_fftsize, unit->m_fftsize, kRectWindow, unit->m_fftbuf2, unit->m_fftbuf2, kForward, alloc);
     unit->m_scfftR =
         scfft_create(unit->m_fftsize, unit->m_fftsize, kRectWindow, unit->m_fftbuf1, unit->m_outbuf, kBackward, alloc);
-
+    ClearUnitIfMemFailed(unit->m_scfft1 && unit->m_scfft2 && unit->m_scfftR);
     SETCALC(Convolution_next);
 
     // initialize output
@@ -168,7 +173,7 @@ void Convolution_next(Convolution* unit, int numSamples) {
     float* out1 = unit->m_inbuf1 + unit->m_pos;
     float* out2 = unit->m_inbuf2 + unit->m_pos;
 
-    // int numSamples = unit->mWorld->mFullRate.mBufLength;
+    // int numSamples = FULLBUFLENGTH;
 
     // copy input
     Copy(numSamples, out1, in1);
@@ -239,22 +244,31 @@ void Convolution_next(Convolution* unit, int numSamples) {
 
 
 // include local buffer test in one place
-static SndBuf* ConvGetBuffer(Unit* unit, uint32 bufnum, const char* ugenName, int inNumSamples) {
+// TODO: reevaluate the error handling behavior. Should the Unit really stop processing just
+// because it (temporarily) received an invalid buffer number? Probably not.
+static SndBuf* ConvGetBuffer(Unit* unit, int32 bufnum, const char* ugenName, int inNumSamples) {
     SndBuf* buf;
     World* world = unit->mWorld;
 
-    if (bufnum >= world->mNumSndBufs) {
-        int localBufNum = bufnum - world->mNumSndBufs;
-        Graph* parent = unit->mParent;
-        if (localBufNum <= parent->localMaxBufNum) {
-            buf = parent->mLocalSndBufs + localBufNum;
+    // first check if bufnum is positive!
+    if (bufnum >= 0) {
+        if (bufnum >= world->mNumSndBufs) {
+            int localBufNum = bufnum - world->mNumSndBufs;
+            Graph* parent = unit->mParent;
+            if (localBufNum <= parent->localMaxBufNum) {
+                buf = parent->mLocalSndBufs + localBufNum;
+            } else {
+                if (unit->mWorld->mVerbosity > -1)
+                    Print("%s: invalid buffer number (%d).\n", ugenName, bufnum);
+                goto handle_failure;
+            }
         } else {
-            if (unit->mWorld->mVerbosity > -1)
-                Print("%s: invalid buffer number (%d).\n", ugenName, bufnum);
-            goto handle_failure;
+            buf = world->mSndBufs + bufnum;
         }
     } else {
-        buf = world->mSndBufs + bufnum;
+        if (unit->mWorld->mVerbosity > -1)
+            Print("%s: invalid buffer number (%d).\n", ugenName, bufnum);
+        goto handle_failure;
     }
 
     if (buf->data == nullptr) {
@@ -274,10 +288,12 @@ handle_failure:
 
 void Convolution2_Ctor(Convolution2* unit) {
     // require size N+M-1 to be a power of two
-    unit->m_framesize = (int)ZIN0(3);
-    uint32 kernelbufnum = (int)ZIN0(1);
+    unit->m_framesize = (int32)ZIN0(3);
+    int32 kernelbufnum = (int32)ZIN0(1);
     World* world = unit->mWorld;
 
+    unit->m_inbuf1 = unit->m_fftbuf1 = unit->m_fftbuf2 = unit->m_outbuf = unit->m_overlapbuf = nullptr;
+    unit->m_scfft1 = unit->m_scfft2 = unit->m_scfftR = nullptr;
     SndBuf* kernelbuf = ConvGetBuffer(unit, kernelbufnum, "Convolution2", 1);
 
     if (kernelbuf) {
@@ -301,10 +317,12 @@ void Convolution2_Ctor(Convolution2* unit) {
         unit->m_fftbuf2 = (float*)RTAlloc(world, fftsize_f);
 
         unit->m_outbuf = (float*)RTAlloc(world, fftsize_f);
-        memset(unit->m_outbuf, 0, fftsize_f);
         unit->m_overlapbuf = (float*)RTAlloc(world, framesize_f);
-        memset(unit->m_overlapbuf, 0, framesize_f);
+        ClearUnitIfMemFailed(unit->m_inbuf1 && unit->m_fftbuf1 && unit->m_fftbuf2 && unit->m_outbuf
+                             && unit->m_overlapbuf);
 
+        memset(unit->m_outbuf, 0, fftsize_f);
+        memset(unit->m_overlapbuf, 0, framesize_f);
         unit->m_pos = 0;
 
         SCWorld_Allocator alloc(ft, unit->mWorld);
@@ -314,12 +332,8 @@ void Convolution2_Ctor(Convolution2* unit) {
                                       kForward, alloc);
         unit->m_scfftR = scfft_create(unit->m_fftsize, unit->m_fftsize, kRectWindow, unit->m_fftbuf1, unit->m_outbuf,
                                       kBackward, alloc);
-        if (!unit->m_scfft1 || !unit->m_scfft2 || !unit->m_scfftR) {
-            printf("Could not create scfft.\n");
-            SETCALC(*ClearUnitOutputs);
-            unit->mDone = true;
-            return;
-        }
+        ClearUnitIfMemFailed(unit->m_scfft1 && unit->m_scfft2 && unit->m_scfftR);
+
         // calculate fft for kernel straight away
         // we cannot use a kernel larger than the fft size, so truncate if needed. the kernel may be smaller though.
         uint32 framesize = unit->m_framesize;
@@ -334,7 +348,7 @@ void Convolution2_Ctor(Convolution2* unit) {
 
         unit->m_prevtrig = 0.f;
 
-        if (unit->m_framesize >= world->mFullRate.mBufLength) {
+        if (unit->m_framesize >= FULLBUFLENGTH) {
             SETCALC(Convolution2_next);
 
             // initialize output
@@ -371,7 +385,7 @@ void Convolution2_next(Convolution2* unit, int wrongNumSamples) {
 
     float* inbuf1writepos = unit->m_inbuf1 + unit->m_pos;
 
-    int numSamples = unit->mWorld->mFullRate.mBufLength;
+    int numSamples = FULLBUFLENGTH;
     uint32 framesize = unit->m_framesize;
     uint32 framesize_f = framesize * sizeof(float);
 
@@ -381,9 +395,11 @@ void Convolution2_next(Convolution2* unit, int wrongNumSamples) {
     unit->m_pos += numSamples;
 
     if (unit->m_prevtrig <= 0.f && curtrig > 0.f) {
-        SndBuf* kernelbuf = ConvGetBuffer(unit, (uint32)ZIN0(1), "Convolution2", numSamples);
+        int32 kernelbufnum = (int32)ZIN0(1);
+        SndBuf* kernelbuf = ConvGetBuffer(unit, kernelbufnum, "Convolution2", numSamples);
         if (!kernelbuf)
             return;
+
         LOCK_SNDBUF_SHARED(kernelbuf);
 
         // we cannot use a kernel larger than the fft size, so truncate if needed. the kernel may be smaller though.
@@ -464,13 +480,21 @@ void Convolution2L_Ctor(Convolution2L* unit) {
     unit->m_fftbuf3 = (float*)RTAlloc(unit->mWorld, fftsize_f);
     unit->m_tempbuf = (float*)RTAlloc(unit->mWorld, fftsize_f);
 
-    uint32 bufnum = (int)ZIN0(1); // fbufnum;
+    unit->m_outbuf = unit->m_overlapbuf = nullptr;
+    unit->m_scfft1 = unit->m_scfft2 = unit->m_scfft3 = nullptr;
+    unit->m_scfftR = unit->m_scfftR2 = nullptr;
+
+    ClearUnitIfMemFailed(unit->m_inbuf1 && unit->m_fftbuf1 && unit->m_fftbuf2 && unit->m_fftbuf3 && unit->m_tempbuf);
+
+    int32 bufnum = (int32)ZIN0(1); // fbufnum;
 
     SndBuf* buf = ConvGetBuffer(unit, bufnum, "Convolution2L", 1);
 
     if (buf) {
         unit->m_outbuf = (float*)RTAlloc(unit->mWorld, fftsize_f);
         unit->m_overlapbuf = (float*)RTAlloc(unit->mWorld, framesize_f);
+
+        ClearUnitIfMemFailed(unit->m_outbuf && unit->m_overlapbuf);
 
         memset(unit->m_outbuf, 0, fftsize_f);
         memset(unit->m_overlapbuf, 0, framesize_f);
@@ -492,6 +516,7 @@ void Convolution2L_Ctor(Convolution2L* unit) {
         unit->m_scfftR2 = scfft_create(unit->m_fftsize, unit->m_fftsize, kRectWindow, unit->m_tempbuf, unit->m_tempbuf,
                                        kBackward, alloc);
 
+        ClearUnitIfMemFailed(unit->m_scfft1 && unit->m_scfft2 && unit->m_scfft3 && unit->m_scfftR && unit->m_scfftR2);
         scfft_dofft(unit->m_scfft2);
 
         unit->m_pos = 0;
@@ -537,7 +562,7 @@ void Convolution2L_next(Convolution2L* unit, int numSamples) {
     unit->m_pos += numSamples;
 
     if (unit->m_prevtrig <= 0.f && curtrig > 0.f) {
-        uint32 bufnum = (int)ZIN0(1);
+        int32 bufnum = (int32)ZIN0(1);
         SndBuf* buf = ConvGetBuffer(unit, bufnum, "Convolution2L", numSamples);
         if (!buf)
             return;
@@ -707,6 +732,12 @@ void StereoConvolution2L_Ctor(StereoConvolution2L* unit) {
     unit->m_overlapbuf[0] = (float*)RTAlloc(unit->mWorld, framesize_f);
     unit->m_outbuf[1] = (float*)RTAlloc(unit->mWorld, fftsize_f);
     unit->m_overlapbuf[1] = (float*)RTAlloc(unit->mWorld, framesize_f);
+    unit->m_scfft1 = nullptr;
+    unit->m_scfft2[0] = unit->m_scfft3[0] = unit->m_scfftR[0] = unit->m_scfftR2[0] = nullptr;
+    unit->m_scfft2[1] = unit->m_scfft3[1] = unit->m_scfftR[1] = unit->m_scfftR2[1] = nullptr;
+    ClearUnitIfMemFailed(unit->m_inbuf1 && unit->m_fftbuf1 && unit->m_fftbuf2[0] && unit->m_fftbuf2[1]
+                         && unit->m_fftbuf3[0] && unit->m_fftbuf3[1] && unit->m_tempbuf[0] && unit->m_tempbuf[1]
+                         && unit->m_outbuf[0] && unit->m_outbuf[1] && unit->m_overlapbuf[0] && unit->m_overlapbuf[1]);
 
     memset(unit->m_outbuf[0], 0, fftsize_f);
     memset(unit->m_overlapbuf[0], 0, framesize_f);
@@ -733,11 +764,12 @@ void StereoConvolution2L_Ctor(StereoConvolution2L* unit) {
     unit->m_scfftR2[1] = scfft_create(unit->m_fftsize, unit->m_fftsize, kRectWindow, unit->m_tempbuf[1],
                                       unit->m_tempbuf[1], kBackward, alloc);
 
-    float fbufnum = ZIN0(1);
-    uint32 bufnumL = (int)fbufnum;
-    fbufnum = ZIN0(2);
-    uint32 bufnumR = (int)fbufnum;
-    // printf("bufnum %i \n", bufnum);
+    ClearUnitIfMemFailed(unit->m_scfft1 && unit->m_scfft2[0] && unit->m_scfft3[0] && unit->m_scfftR[0]
+                         && unit->m_scfftR2[0]);
+    ClearUnitIfMemFailed(unit->m_scfft2[1] && unit->m_scfft3[1] && unit->m_scfftR[1] && unit->m_scfftR2[1]);
+    int32 bufnumL = (int32)ZIN0(1);
+    int32 bufnumR = (int32)ZIN0(2);
+    // printf("bufnumL: %d, bufnumR: %d\n", bufnumL, bufnumR);
 
     // unit->m_log2n = LOG2CEIL(unit->m_fftsize);
     // int log2n = unit->m_log2n;
@@ -810,7 +842,7 @@ void StereoConvolution2L_next(StereoConvolution2L* unit, int wrongNumSamples) {
 
     float* out1 = unit->m_inbuf1 + unit->m_pos;
 
-    int numSamples = unit->mWorld->mFullRate.mBufLength;
+    int numSamples = FULLBUFLENGTH;
     uint32 framesize_f = unit->m_framesize * sizeof(float);
 
     // copy input
@@ -819,11 +851,9 @@ void StereoConvolution2L_next(StereoConvolution2L* unit, int wrongNumSamples) {
     unit->m_pos += numSamples;
 
     if (unit->m_prevtrig <= 0.f && curtrig > 0.f) {
-        float fbufnum = ZIN0(1);
-        uint32 bufnumL = (int)fbufnum;
-        fbufnum = ZIN0(2);
-        uint32 bufnumR = (int)fbufnum;
-        unit->m_cflength = (int)ZIN0(5);
+        int32 bufnumL = (int32)ZIN0(1);
+        int32 bufnumR = (int32)ZIN0(2);
+        unit->m_cflength = (int32)ZIN0(5);
 
         SndBuf* bufL = ConvGetBuffer(unit, bufnumL, "StereoConvolution2L", numSamples);
         SndBuf* bufR = ConvGetBuffer(unit, bufnumR, "StereoConvolution2L", numSamples);
@@ -992,12 +1022,13 @@ void StereoConvolution2L_next(StereoConvolution2L* unit, int wrongNumSamples) {
 }
 
 void Convolution3_Ctor(Convolution3* unit) {
-    unit->m_framesize = (int)ZIN0(3);
+    unit->m_framesize = (int32)ZIN0(3);
 
-    float fbufnum = ZIN0(1);
-    uint32 bufnum = (int)fbufnum;
+    int32 bufnum = (int32)ZIN0(1);
 
     SndBuf* buf = ConvGetBuffer(unit, bufnum, "Convolution3", 1);
+
+    unit->m_inbuf1 = unit->m_inbuf2 = unit->m_outbuf = nullptr;
 
     if (buf) {
         if (unit->m_framesize <= 0) // if smaller than zero, equal to size of buffer
@@ -1010,13 +1041,14 @@ void Convolution3_Ctor(Convolution3* unit) {
 
         unit->m_inbuf1 = (float*)RTAlloc(unit->mWorld, framesize_f);
         unit->m_inbuf2 = (float*)RTAlloc(unit->mWorld, framesize_f);
+        unit->m_outbuf = (float*)RTAlloc(unit->mWorld, framesize_f);
+        ClearUnitIfMemFailed(unit->m_inbuf1 && unit->m_inbuf2 && unit->m_outbuf);
 
         LOCK_SNDBUF_SHARED(buf);
         // calculate fft for kernel straight away
         memcpy(unit->m_inbuf2, buf->data, framesize_f);
         unit->m_pos = 0;
 
-        unit->m_outbuf = (float*)RTAlloc(unit->mWorld, framesize_f);
         memset(unit->m_outbuf, 0, framesize_f);
         unit->m_prevtrig = 0.f;
         if (INRATE(0) == calc_FullRate)
@@ -1041,16 +1073,18 @@ void Convolution3_next_a(Convolution3* unit) {
 
     float* pin1 = unit->m_inbuf1;
 
-    int numSamples = unit->mWorld->mFullRate.mBufLength;
+    int numSamples = FULLBUFLENGTH;
 
     // copy input
     Copy(numSamples, pin1, in);
 
     if (unit->m_prevtrig <= 0.f && curtrig > 0.f) {
         uint32 framesize_f = unit->m_framesize * sizeof(float);
-        float fbufnum = ZIN0(1);
-        uint32 bufnum = (int)fbufnum;
+        int32 bufnum = (int32)ZIN0(1);
         SndBuf* buf = ConvGetBuffer(unit, bufnum, "Convolution3", numSamples);
+        if (!buf)
+            return;
+
         LOCK_SNDBUF_SHARED(buf);
         memcpy(unit->m_inbuf2, buf->data, framesize_f);
     }
@@ -1091,15 +1125,13 @@ void Convolution3_next_k(Convolution3* unit) {
 
     uint32 framesize_f = unit->m_framesize * sizeof(float);
 
-
     if (unit->m_prevtrig <= 0.f && curtrig > 0.f) {
-        float fbufnum = ZIN0(1);
-        uint32 bufnum = (int)fbufnum;
+        int32 bufnum = (int32)ZIN0(1);
         SndBuf* buf = ConvGetBuffer(unit, bufnum, "Convolution3", 1);
         if (!buf)
             return;
-        LOCK_SNDBUF_SHARED(buf);
 
+        LOCK_SNDBUF_SHARED(buf);
         memcpy(unit->m_inbuf2, buf->data, framesize_f);
     }
 

@@ -218,38 +218,38 @@ struct DelTapRd : public Unit {
 
 extern "C" {
 
-void SampleRate_Ctor(Unit* unit, int inNumSamples);
-void ControlRate_Ctor(Unit* unit, int inNumSamples);
-void SampleDur_Ctor(Unit* unit, int inNumSamples);
-void ControlDur_Ctor(Unit* unit, int inNumSamples);
-void SubsampleOffset_Ctor(Unit* unit, int inNumSamples);
-void RadiansPerSample_Ctor(Unit* unit, int inNumSamples);
-void NumInputBuses_Ctor(Unit* unit, int inNumSamples);
-void NumOutputBuses_Ctor(Unit* unit, int inNumSamples);
-void NumAudioBuses_Ctor(Unit* unit, int inNumSamples);
-void NumControlBuses_Ctor(Unit* unit, int inNumSamples);
-void NumBuffers_Ctor(Unit* unit, int inNumSamples);
-void NodeID_Ctor(Unit* unit, int inNumSamples);
-void NumRunningSynths_Ctor(Unit* unit, int inNumSamples);
+void SampleRate_Ctor(Unit* unit);
+void ControlRate_Ctor(Unit* unit);
+void SampleDur_Ctor(Unit* unit);
+void ControlDur_Ctor(Unit* unit);
+void SubsampleOffset_Ctor(Unit* unit);
+void RadiansPerSample_Ctor(Unit* unit);
+void NumInputBuses_Ctor(Unit* unit);
+void NumOutputBuses_Ctor(Unit* unit);
+void NumAudioBuses_Ctor(Unit* unit);
+void NumControlBuses_Ctor(Unit* unit);
+void NumBuffers_Ctor(Unit* unit);
+void NodeID_Ctor(Unit* unit);
+void NumRunningSynths_Ctor(Unit* unit);
 void NumRunningSynths_next(Unit* unit, int inNumSamples);
 
 void BufSampleRate_next(BufInfoUnit* unit, int inNumSamples);
-void BufSampleRate_Ctor(BufInfoUnit* unit, int inNumSamples);
+void BufSampleRate_Ctor(BufInfoUnit* unit);
 
 void BufFrames_next(BufInfoUnit* unit, int inNumSamples);
-void BufFrames_Ctor(BufInfoUnit* unit, int inNumSamples);
+void BufFrames_Ctor(BufInfoUnit* unit);
 
 void BufDur_next(BufInfoUnit* unit, int inNumSamples);
-void BufDur_Ctor(BufInfoUnit* unit, int inNumSamples);
+void BufDur_Ctor(BufInfoUnit* unit);
 
 void BufChannels_next(BufInfoUnit* unit, int inNumSamples);
-void BufChannels_Ctor(BufInfoUnit* unit, int inNumSamples);
+void BufChannels_Ctor(BufInfoUnit* unit);
 
 void BufSamples_next(BufInfoUnit* unit, int inNumSamples);
-void BufSamples_Ctor(BufInfoUnit* unit, int inNumSamples);
+void BufSamples_Ctor(BufInfoUnit* unit);
 
 void BufRateScale_next(BufInfoUnit* unit, int inNumSamples);
-void BufRateScale_Ctor(BufInfoUnit* unit, int inNumSamples);
+void BufRateScale_Ctor(BufInfoUnit* unit);
 
 void PlayBuf_next_aa(PlayBuf* unit, int inNumSamples);
 void PlayBuf_next_ak(PlayBuf* unit, int inNumSamples);
@@ -431,38 +431,36 @@ void DelTapRd_next4_k(DelTapRd* unit, int inNumSamples);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-void SampleRate_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = unit->mWorld->mSampleRate; }
+void SampleRate_Ctor(Unit* unit) { ZOUT0(0) = FULLRATE; }
+
+void ControlRate_Ctor(Unit* unit) { ZOUT0(0) = BUFRATE; }
+
+void SampleDur_Ctor(Unit* unit) { ZOUT0(0) = FULLSAMPLEDUR; }
+
+void ControlDur_Ctor(Unit* unit) { ZOUT0(0) = BUFDUR; }
+
+void RadiansPerSample_Ctor(Unit* unit) { ZOUT0(0) = unit->mWorld->mFullRate.mRadiansPerSample; }
+
+void BlockSize_Ctor(Unit* unit) { ZOUT0(0) = FULLBUFLENGTH; }
+
+void SubsampleOffset_Ctor(Unit* unit) { ZOUT0(0) = unit->mParent->mSubsampleOffset; }
 
 
-void ControlRate_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = unit->mWorld->mBufRate.mSampleRate; }
+void NumInputBuses_Ctor(Unit* unit) { ZOUT0(0) = unit->mWorld->mNumInputs; }
 
+void NumOutputBuses_Ctor(Unit* unit) { ZOUT0(0) = unit->mWorld->mNumOutputs; }
 
-void SampleDur_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = unit->mWorld->mFullRate.mSampleDur; }
+void NumAudioBuses_Ctor(Unit* unit) { ZOUT0(0) = unit->mWorld->mNumAudioBusChannels; }
 
-void ControlDur_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = unit->mWorld->mFullRate.mBufDuration; }
+void NumControlBuses_Ctor(Unit* unit) { ZOUT0(0) = unit->mWorld->mNumControlBusChannels; }
 
-void RadiansPerSample_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = unit->mWorld->mFullRate.mRadiansPerSample; }
+void NumBuffers_Ctor(Unit* unit) { ZOUT0(0) = unit->mWorld->mNumSndBufs; }
 
-void BlockSize_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = unit->mWorld->mFullRate.mBufLength; }
-
-void SubsampleOffset_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = unit->mParent->mSubsampleOffset; }
-
-
-void NumInputBuses_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = unit->mWorld->mNumInputs; }
-
-void NumOutputBuses_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = unit->mWorld->mNumOutputs; }
-
-void NumAudioBuses_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = unit->mWorld->mNumAudioBusChannels; }
-
-void NumControlBuses_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = unit->mWorld->mNumControlBusChannels; }
-
-void NumBuffers_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = unit->mWorld->mNumSndBufs; }
-
-void NodeID_Ctor(Unit* unit, int inNumSamples) { ZOUT0(0) = (float)unit->mParent->mNode.mID; }
+void NodeID_Ctor(Unit* unit) { ZOUT0(0) = (float)unit->mParent->mNode.mID; }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-void NumRunningSynths_Ctor(Unit* unit, int inNumSamples) {
+void NumRunningSynths_Ctor(Unit* unit) {
     if (INRATE(0) != calc_ScalarRate) {
         SETCALC(NumRunningSynths_next);
     }
@@ -499,7 +497,7 @@ void BufSampleRate_next(BufInfoUnit* unit, int inNumSamples) {
     ZOUT0(0) = buf->samplerate;
 }
 
-void BufSampleRate_Ctor(BufInfoUnit* unit, int inNumSamples) {
+void BufSampleRate_Ctor(BufInfoUnit* unit) {
     SETCALC(BufSampleRate_next);
     CTOR_GET_BUF
     unit->m_fbufnum = fbufnum;
@@ -513,7 +511,7 @@ void BufFrames_next(BufInfoUnit* unit, int inNumSamples) {
     ZOUT0(0) = buf->frames;
 }
 
-void BufFrames_Ctor(BufInfoUnit* unit, int inNumSamples) {
+void BufFrames_Ctor(BufInfoUnit* unit) {
     SETCALC(BufFrames_next);
     CTOR_GET_BUF
     unit->m_fbufnum = fbufnum;
@@ -527,7 +525,7 @@ void BufDur_next(BufInfoUnit* unit, int inNumSamples) {
     ZOUT0(0) = buf->frames * buf->sampledur;
 }
 
-void BufDur_Ctor(BufInfoUnit* unit, int inNumSamples) {
+void BufDur_Ctor(BufInfoUnit* unit) {
     SETCALC(BufDur_next);
     CTOR_GET_BUF
     unit->m_fbufnum = fbufnum;
@@ -541,7 +539,7 @@ void BufChannels_next(BufInfoUnit* unit, int inNumSamples) {
     ZOUT0(0) = buf->channels;
 }
 
-void BufChannels_Ctor(BufInfoUnit* unit, int inNumSamples) {
+void BufChannels_Ctor(BufInfoUnit* unit) {
     SETCALC(BufChannels_next);
     CTOR_GET_BUF
     unit->m_fbufnum = fbufnum;
@@ -555,7 +553,7 @@ void BufSamples_next(BufInfoUnit* unit, int inNumSamples) {
     ZOUT0(0) = buf->samples;
 }
 
-void BufSamples_Ctor(BufInfoUnit* unit, int inNumSamples) {
+void BufSamples_Ctor(BufInfoUnit* unit) {
     SETCALC(BufSamples_next);
     CTOR_GET_BUF
     unit->m_fbufnum = fbufnum;
@@ -566,15 +564,15 @@ void BufSamples_Ctor(BufInfoUnit* unit, int inNumSamples) {
 
 void BufRateScale_next(BufInfoUnit* unit, int inNumSamples) {
     SIMPLE_GET_BUF_SHARED
-    ZOUT0(0) = buf->samplerate * unit->mWorld->mFullRate.mSampleDur;
+    ZOUT0(0) = buf->samplerate * FULLSAMPLEDUR;
 }
 
-void BufRateScale_Ctor(BufInfoUnit* unit, int inNumSamples) {
+void BufRateScale_Ctor(BufInfoUnit* unit) {
     SETCALC(BufRateScale_next);
     CTOR_GET_BUF
     unit->m_fbufnum = fbufnum;
     unit->m_buf = buf;
-    ZOUT0(0) = buf->samplerate * unit->mWorld->mFullRate.mSampleDur;
+    ZOUT0(0) = buf->samplerate * FULLSAMPLEDUR;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -587,13 +585,7 @@ static void LocalBuf_allocBuffer(LocalBuf* unit, SndBuf* buf, int numChannels, i
     // numFrames, numSamples * sizeof(float));
     const int alignment = 128; // in bytes
     unit->chunk = (float*)RTAlloc(unit->mWorld, numSamples * sizeof(float) + alignment);
-
-    if (!unit->chunk) {
-        if (unit->mWorld->mVerbosity > -2) {
-            Print("failed to allocate memory for LocalBuffer\n");
-        }
-        return;
-    }
+    ClearUnitIfMemFailed(unit->chunk);
 
     buf->data = (float*)((intptr_t)((char*)unit->chunk + (alignment - 1)) & -alignment);
 
@@ -602,7 +594,7 @@ static void LocalBuf_allocBuffer(LocalBuf* unit, SndBuf* buf, int numChannels, i
     buf->samples = numSamples;
     buf->mask = BUFMASK(numSamples); // for delay lines
     buf->mask1 = buf->mask - 1; // for oscillators
-    buf->samplerate = unit->mWorld->mSampleRate;
+    buf->samplerate = FULLRATE;
     buf->sampledur = 1. / buf->samplerate;
 #if SUPERNOVA
     buf->isLocal = true;
@@ -611,7 +603,7 @@ static void LocalBuf_allocBuffer(LocalBuf* unit, SndBuf* buf, int numChannels, i
 
 void LocalBuf_Ctor(LocalBuf* unit) {
     Graph* parent = unit->mParent;
-
+    unit->chunk = nullptr;
     int offset = unit->mWorld->mNumSndBufs;
     int bufnum = parent->localBufNum;
     float fbufnum;
@@ -626,6 +618,8 @@ void LocalBuf_Ctor(LocalBuf* unit) {
         parent->localBufNum = parent->localBufNum + 1;
 
         LocalBuf_allocBuffer(unit, unit->m_buf, (int)IN0(0), (int)IN0(1));
+        if (!unit->chunk)
+            fbufnum = -1.f;
     }
 
     OUT0(0) = fbufnum;
@@ -651,6 +645,7 @@ void MaxLocalBufs_Ctor(MaxLocalBufs* unit) {
     int maxBufNum = (int)(IN0(0) + .5f);
     if (!parent->localMaxBufNum) {
         parent->mLocalSndBufs = (SndBuf*)RTAlloc(unit->mWorld, maxBufNum * sizeof(SndBuf));
+        ClearUnitIfMemFailed(parent->mLocalSndBufs);
 #ifdef SUPERNOVA
         for (int i = 0; i != maxBufNum; ++i)
             new (&parent->mLocalSndBufs[i]) SndBuf();
@@ -768,11 +763,7 @@ handle_failure:
     }                                                                                                                  \
     if (!unit->mIn) {                                                                                                  \
         unit->mIn = (float**)RTAlloc(unit->mWorld, numInputs * sizeof(float*));                                        \
-        if (unit->mIn == NULL) {                                                                                       \
-            unit->mDone = true;                                                                                        \
-            ClearUnitOutputs(unit, inNumSamples);                                                                      \
-            return;                                                                                                    \
-        }                                                                                                              \
+        ClearUnitIfMemFailed(unit->mIn);                                                                               \
     }                                                                                                                  \
     float** in = unit->mIn;                                                                                            \
     for (uint32 i = 0; i < numInputs; ++i) {                                                                           \
@@ -1691,23 +1682,24 @@ void Pitch_Ctor(Pitch* unit) {
 
     if (INRATE(kPitchIn) == calc_FullRate) {
         SETCALC(Pitch_next_a);
-        unit->m_downsamp = sc_clip(downsamp, 1, unit->mWorld->mFullRate.mBufLength);
+        unit->m_downsamp = sc_clip(downsamp, 1, FULLBUFLENGTH);
         unit->m_srate = FULLRATE / (float)unit->m_downsamp;
     } else {
         SETCALC(Pitch_next_k);
         unit->m_downsamp = sc_max(downsamp, 1);
-        unit->m_srate = FULLRATE / (float)(unit->mWorld->mFullRate.mBufLength * unit->m_downsamp);
+        unit->m_srate = FULLRATE / (float)(FULLBUFLENGTH * unit->m_downsamp);
     }
 
     unit->m_minperiod = (long)(unit->m_srate / unit->m_maxfreq);
     unit->m_maxperiod = (long)(unit->m_srate / unit->m_minfreq);
 
     unit->m_execPeriod = (int)(unit->m_srate / execfreq);
-    unit->m_execPeriod = sc_max(unit->m_execPeriod, unit->mWorld->mFullRate.mBufLength);
+    unit->m_execPeriod = sc_max(unit->m_execPeriod, FULLBUFLENGTH);
 
     unit->m_size = sc_max(unit->m_maxperiod << 1, unit->m_execPeriod);
 
     unit->m_buffer = (float*)RTAlloc(unit->mWorld, unit->m_size * sizeof(float));
+    ClearUnitIfMemFailed(unit->m_buffer);
 
     unit->m_index = 0;
     unit->m_readp = 0;
@@ -1731,7 +1723,7 @@ void Pitch_next_a(Pitch* unit, int inNumSamples) {
     uint32 index = unit->m_index;
     int downsamp = unit->m_downsamp;
     int readp = unit->m_readp;
-    int ksamps = unit->mWorld->mFullRate.mBufLength;
+    int ksamps = FULLBUFLENGTH;
 
     float* bufData = unit->m_buffer;
 
@@ -1931,7 +1923,7 @@ void Pitch_next_k(Pitch* unit, int inNumSamples) {
     uint32 index = unit->m_index;
     int downsamp = unit->m_downsamp;
     int readp = unit->m_readp;
-    //  	int ksamps = unit->mWorld->mFullRate.mBufLength;
+    //  	int ksamps = FULLBUFLENGTH;
 
     float* bufData = unit->m_buffer;
 
@@ -3443,7 +3435,7 @@ void BufAllpassC_next_a_z(BufAllpassC* unit, int inNumSamples) { BufAllpassC_per
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static bool DelayUnit_AllocDelayLine(DelayUnit* unit, const char* className) {
+static bool DelayUnit_AllocDelayLine(DelayUnit* unit) {
     long delaybufsize = (long)ceil(unit->m_maxdelaytime * SAMPLERATE + 1.f);
     delaybufsize = delaybufsize + BUFLENGTH;
     delaybufsize = NEXTPOWEROFTWO(delaybufsize); // round up to next power of two
@@ -3457,14 +3449,6 @@ static bool DelayUnit_AllocDelayLine(DelayUnit* unit, const char* className) {
 	std::fill_n(unit->m_dlybuf, delaybufsize, std::numeric_limits<float>::signaling_NaN());
 #endif
 
-    if (unit->m_dlybuf == nullptr) {
-        SETCALC(ft->fClearUnitOutputs);
-        ClearUnitOutputs(unit, 1);
-
-        if (unit->mWorld->mVerbosity > -2)
-            Print("Failed to allocate memory for %s ugen.\n", className);
-    }
-
     unit->m_mask = delaybufsize - 1;
     return (unit->m_dlybuf != nullptr);
 }
@@ -3475,12 +3459,12 @@ template <typename Unit> static float CalcDelay(Unit* unit, float delaytime) {
     return sc_clip(next_dsamp, minDelay, unit->m_fdelaylen);
 }
 
-template <typename Unit> static bool DelayUnit_Reset(Unit* unit, const char* className) {
+template <typename Unit> static bool DelayUnit_Reset(Unit* unit) {
     unit->m_maxdelaytime = ZIN0(1);
     unit->m_delaytime = ZIN0(2);
     unit->m_dlybuf = nullptr;
 
-    if (!DelayUnit_AllocDelayLine(unit, className))
+    if (!DelayUnit_AllocDelayLine(unit))
         return false;
 
     unit->m_dsamp = CalcDelay(unit, unit->m_delaytime);
@@ -3495,10 +3479,10 @@ void DelayUnit_Dtor(DelayUnit* unit) { RTFree(unit->mWorld, unit->m_dlybuf); }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-template <typename Unit> static bool FeedbackDelay_Reset(Unit* unit, const char* className) {
+template <typename Unit> static bool FeedbackDelay_Reset(Unit* unit) {
     unit->m_decaytime = ZIN0(3);
 
-    bool allocationSucessful = DelayUnit_Reset(unit, className);
+    bool allocationSucessful = DelayUnit_Reset(unit);
     if (!allocationSucessful)
         return false;
 
@@ -3600,12 +3584,12 @@ static bool DelayUnit_init_0(DelayUnit* unit) {
         return false;
 }
 
-enum { initializationComplete, initializationIncomplete };
+enum { allocFailed, initializationComplete, initializationIncomplete };
 
-template <typename Delay> static int Delay_Ctor(Delay* unit, const char* className) {
-    bool allocationSucessful = DelayUnit_Reset(unit, className);
+template <typename Delay> static int Delay_Ctor(Delay* unit) {
+    bool allocationSucessful = DelayUnit_Reset(unit);
     if (!allocationSucessful)
-        return initializationComplete;
+        return allocFailed;
 
     // optimize for a constant delay of zero
     if (DelayUnit_init_0(unit))
@@ -3616,8 +3600,12 @@ template <typename Delay> static int Delay_Ctor(Delay* unit, const char* classNa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void DelayN_Ctor(DelayN* unit) {
-    if (Delay_Ctor(unit, "DelayN") == initializationComplete)
+    int ctor_status = Delay_Ctor(unit);
+    if (ctor_status == allocFailed) {
+        ClearUnitOnMemFailed;
+    } else if (ctor_status == initializationComplete) {
         return;
+    }
 
     if (INRATE(2) == calc_FullRate)
         SETCALC(DelayN_next_a_z);
@@ -3694,8 +3682,12 @@ void DelayN_next_a_z(DelayN* unit, int inNumSamples) { DelayN_perform_a<true>(un
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void DelayL_Ctor(DelayL* unit) {
-    if (Delay_Ctor(unit, "DelayL") == initializationComplete)
+    int ctor_status = Delay_Ctor(unit);
+    if (ctor_status == allocFailed) {
+        ClearUnitOnMemFailed;
+    } else if (ctor_status == initializationComplete) {
         return;
+    }
 
     if (INRATE(2) == calc_FullRate)
         SETCALC(DelayL_next_a_z);
@@ -3724,8 +3716,12 @@ void DelayL_next_a_z(DelayL* unit, int inNumSamples) { DelayL_perform_a<true>(un
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void DelayC_Ctor(DelayC* unit) {
-    if (Delay_Ctor(unit, "DelayC") == initializationComplete)
+    int ctor_status = Delay_Ctor(unit);
+    if (ctor_status == allocFailed) {
+        ClearUnitOnMemFailed;
+    } else if (ctor_status == initializationComplete) {
         return;
+    }
 
     if (INRATE(2) == calc_FullRate)
         SETCALC(DelayC_next_a_z);
@@ -3825,9 +3821,8 @@ inline void FilterX_perform_a(CombX* unit, int inNumSamples, UnitCalcFunc resetF
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void CombN_Ctor(CombN* unit) {
-    bool allocationSucessful = FeedbackDelay_Reset(unit, "CombN");
-    if (!allocationSucessful)
-        return;
+    bool allocationSucessful = FeedbackDelay_Reset(unit);
+    ClearUnitIfMemFailed(allocationSucessful);
 
     if (INRATE(2) == calc_FullRate)
         SETCALC(CombN_next_a_z);
@@ -4006,9 +4001,8 @@ void CombN_next_a_z(CombN* unit, int inNumSamples) { CombN_perform_a<true>(unit,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void CombL_Ctor(CombL* unit) {
-    bool allocationSucessful = FeedbackDelay_Reset(unit, "CombL");
-    if (!allocationSucessful)
-        return;
+    bool allocationSucessful = FeedbackDelay_Reset(unit);
+    ClearUnitIfMemFailed(allocationSucessful);
 
     if (INRATE(2) == calc_FullRate)
         SETCALC(CombL_next_a_z);
@@ -4036,9 +4030,8 @@ void CombL_next_a_z(CombL* unit, int inNumSamples) { CombL_perform_a<true>(unit,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void CombC_Ctor(CombC* unit) {
-    bool allocationSucessful = FeedbackDelay_Reset(unit, "CombC");
-    if (!allocationSucessful)
-        return;
+    bool allocationSucessful = FeedbackDelay_Reset(unit);
+    ClearUnitIfMemFailed(allocationSucessful);
 
     if (INRATE(2) == calc_FullRate)
         SETCALC(CombC_next_a_z);
@@ -4068,9 +4061,8 @@ void CombC_next_a_z(CombC* unit, int inNumSamples) { CombC_perform_a<true>(unit,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void AllpassN_Ctor(AllpassN* unit) {
-    bool allocationSucessful = FeedbackDelay_Reset(unit, "AllpassN");
-    if (!allocationSucessful)
-        return;
+    bool allocationSucessful = FeedbackDelay_Reset(unit);
+    ClearUnitIfMemFailed(allocationSucessful);
 
     if (INRATE(2) == calc_FullRate)
         SETCALC(AllpassN_next_a_z);
@@ -4253,9 +4245,8 @@ void AllpassN_next_a_z(AllpassN* unit, int inNumSamples) { AllpassN_perform_a<tr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void AllpassL_Ctor(AllpassL* unit) {
-    bool allocationSucessful = FeedbackDelay_Reset(unit, "AllpassL");
-    if (!allocationSucessful)
-        return;
+    bool allocationSucessful = FeedbackDelay_Reset(unit);
+    ClearUnitIfMemFailed(allocationSucessful);
 
     if (INRATE(2) == calc_FullRate)
         SETCALC(AllpassL_next_a_z);
@@ -4284,9 +4275,8 @@ void AllpassL_next_a_z(AllpassL* unit, int inNumSamples) { AllpassL_perform_a<tr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void AllpassC_Ctor(AllpassC* unit) {
-    bool allocationSucessful = FeedbackDelay_Reset(unit, "AllpassC");
-    if (!allocationSucessful)
-        return;
+    bool allocationSucessful = FeedbackDelay_Reset(unit);
+    ClearUnitIfMemFailed(allocationSucessful);
 
     if (INRATE(2) == calc_FullRate)
         SETCALC(AllpassC_next_a_z);
@@ -4535,7 +4525,7 @@ void ScopeOut2_next(ScopeOut2* unit, int inNumSamples) {
     }
 
     if (framepos + inNumSamples >= period)
-        (*ft->fPushScopeBuffer)(unit->mWorld, unit->m_buffer, period);
+        (*ft->fPushScopeBuffer)(unit->mWorld, &unit->m_buffer, period);
 
     if (wrap) {
         for (int i = 0; i != numChannels; ++i) {
@@ -4557,7 +4547,7 @@ void ScopeOut2_Ctor(ScopeOut2* unit) {
     uint32 scopeNum = (uint32)ZIN0(0);
     uint32 maxFrames = (uint32)ZIN0(1);
 
-    bool ok = (*ft->fGetScopeBuffer)(unit->mWorld, scopeNum, numChannels, maxFrames, unit->m_buffer);
+    bool ok = (*ft->fGetScopeBuffer)(unit->mWorld, scopeNum, numChannels, maxFrames, &unit->m_buffer);
 
     if (!ok) {
         if (unit->mWorld->mVerbosity > -1 && !unit->mDone)
@@ -4572,7 +4562,7 @@ void ScopeOut2_Ctor(ScopeOut2* unit) {
 
 void ScopeOut2_Dtor(ScopeOut2* unit) {
     if (unit->m_buffer)
-        (*ft->fReleaseScopeBuffer)(unit->mWorld, unit->m_buffer);
+        (*ft->fReleaseScopeBuffer)(unit->mWorld, &unit->m_buffer);
 }
 
 
@@ -5000,7 +4990,9 @@ void PitchShift_Ctor(PitchShift* unit) {
 
     delaybufsize = delaybufsize + BUFLENGTH;
     delaybufsize = NEXTPOWEROFTWO(delaybufsize); // round up to next power of two
+    unit->dlybuf = nullptr;
     dlybuf = (float*)RTAlloc(unit->mWorld, delaybufsize * sizeof(float));
+    ClearUnitIfMemFailed(dlybuf);
 
     SETCALC(PitchShift_next_z);
 
@@ -5587,9 +5579,8 @@ void Pluck_Ctor(Pluck* unit) {
     unit->m_delaytime = IN0(3);
     unit->m_decaytime = IN0(4);
     unit->m_dlybuf = nullptr;
-    bool allocationSucessful = DelayUnit_AllocDelayLine(unit, "Pluck");
-    if (!allocationSucessful)
-        return;
+    bool allocationSucessful = DelayUnit_AllocDelayLine(unit);
+    ClearUnitIfMemFailed(allocationSucessful);
 
     unit->m_dsamp = CalcDelay(unit, unit->m_delaytime);
 

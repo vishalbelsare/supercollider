@@ -5,7 +5,29 @@ related:: Classes/Quarks, Classes/Quark, Classes/Git
 
 Quarks are packages of SuperCollider code containing classes, extension methods, documentation and server UGen plugins. The Quarks class manages downloading these packages and installing or uninstalling them.
 
-section:: Installing quarks
+warning::
+As individual users or groups develop their own Quark for different purposes, it is possible that installing multiple packages could cause problems because they conflict with each other. We therefore recommend that you select and install only the packages that you need. It may also be helpful to install one Quark package at a time, which should make it easier to troubleshoot problems as they arise.
+::
+
+note::
+If you have trouble finding the Quarks package you need, you may find the Quarks package information in the following encyclopaedia useful:
+link::https://baryon.supercollider.online::
+::
+
+section::Preliminary stages
+
+Quarks installation depends on emphasis::git:: version-control software. Detailed installation instructions may be found at link::https://git-scm.com::.
+
+list::
+##Windows users can download and install the appropriate installation file for their environment from link::https://git-scm.com/download/win::.
+##Linux users can copy the appropriate terminal commands from link::https://git-scm.com/download/linux:: for their environment and run them in a terminal window.
+##For Mac users, we recommend installing git from Homebrew, as described at link::https://git-scm.com/download/mac::. If you are unsure whether you have Homebrew installed, follow the instructions for installing Homebrew first. You may also need to install 'Xcode Command Line Tools' if a window pops up asking you to install it.
+::
+
+
+
+section:: Installing/uninstalling/updating quarks
+
 
 subsection::using the GUI
 
@@ -108,6 +130,18 @@ If you are using the SC IDE then open strong::Preferences > Interpreter:: and re
 You can also manually edit teletype::sclang_config.yaml::
 
 
+subsection::Updating Quarks
+
+You can update all installed Quarks by evaluating the following code:
+code::
+Quarks.all.do{ |quark| quark.update() };
+::
+or by pressing the 'Check for updates' button after evaluating the following code:
+code::
+Quarks.gui
+::
+
+
 
 section:: Saving and Loading sets of Quarks
 
@@ -133,8 +167,8 @@ If you have installed local paths that are not under git source control (your ow
 The file format looks like this:
 
 code::
-git://github.com/author/quarkname@tags/4.1.4
-git://github.com/supercollider-quarks/ddwCommon@8ae156b460dcb08285013265cf3a1c7172bba665
+https://github.com/author/quarkname@tags/4.1.4
+https://github.com/supercollider-quarks/ddwCommon@8ae156b460dcb08285013265cf3a1c7172bba665
 ~/supercollider/quarks/my-thing
 ::
 
@@ -251,6 +285,7 @@ list::
 ## country
 ## since
 ## ext_dependency - text describing external software like "PD" or "processing"
+## preInstall - a function / hook which will be called before installation - see link::Guides/UsingQuarks#Hooks::
 ::
 
 dependencies is a list of Quarks or git urls with optional an @refspec
@@ -258,6 +293,44 @@ dependencies is a list of Quarks or git urls with optional an @refspec
 code::
 Bjorklund
 cruciallib@tags/4.1.4
+::
+
+subsection::Hooks
+
+note::
+Introduced in SuperCollider 3.13 and therefore only available if running at least this version.
+::
+
+It is possible to run a functions which are defined in the code::.quark:: file at specific points of installation or update process, so called "hooks".
+
+This can be used to setup or delete certain directory structures, check for hardware, etc.
+
+Upon execution, the hook function will be handled link::Classes/Quark#-data::, which is the parsed code::.quark:: file as an Link::Classes/Event::, as the first argument.
+
+The following hooks are available and will be executed by link::Classes/Quark#-runHook::
+
+table::
+    ## \preInstall || Will be executed before link::Classes/Quarks#*link:: ||
+    ## \postInstall || Will be executed after link::Classes/Quarks#*link:: ||
+    ## \preUpdate || Will be executed before link::Classes/Git#-pull:: || Upon execution this will have the old state of the code::.quark:: file
+    ## \postUpdate || Will be executed after link::Classes/Git#-pull:: || Upon execution this will have the new, updated state of the code::.quark:: file
+    ## \preUninstall || Will be executed before link::Classes/Quarks#*unlink:: ||
+    ## \postUninstall || Will be executed after link::Classes/Quarks#*unlink:: ||
+::
+
+An example to create a directory with samples for a Quark could look like
+
+code::
+(
+  name: "DemonWidgets",
+  // ...
+  preInstall: {|data|
+	File.mkdir("~/samples/%".format(data[\name]));
+  },
+  postUninstall: {
+	"Samples at '~/samples/DomenWidgets' must be deleted manually".warn;
+  },
+)
 ::
 
 subsection::Deprecated/ignored fields

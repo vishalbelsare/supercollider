@@ -22,12 +22,16 @@
 #pragma once
 
 #include "../QcCallback.hpp"
+#include <QtGlobal>
 #include <QWebEngineView>
 #include <QWebEnginePage>
-#include <QWebEngineCallback>
 #include <QPointer>
 #include <QUrl>
 #include <QException>
+#include <QWebEngineProfile>
+#if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
+#    include <QWebEngineCallback>
+#endif
 
 const static int kWebEngineTimeout = 10000;
 
@@ -79,7 +83,7 @@ Q_SIGNALS:
     void recentlyAudibleChanged(bool recentlyAudible);
 
 public:
-    WebView(QWidget* parent = 0);
+    WebView(QWidget* parent = nullptr, QWebEngineProfile* profile = nullptr);
 
     Q_PROPERTY(qreal zoom READ zoomFactor WRITE setZoomFactor);
     Q_PROPERTY(bool hasSelection READ hasSelection);
@@ -116,8 +120,12 @@ public:
     Q_PROPERTY(QSizeF contentsSize READ contentsSize)
     QSizeF contentsSize() const { return page() ? page()->contentsSize() : QSizeF(0, 0); }
 
-    Q_PROPERTY(QPointF scrollPosition READ scrollPosition)
+    Q_PROPERTY(QPointF scrollPosition READ scrollPosition WRITE setScrollPosition)
     QPointF scrollPosition() const { return page() ? page()->scrollPosition() : QPointF(0, 0); }
+    void setScrollPosition(QPointF p) {
+        if (page())
+            page()->runJavaScript(QString("window.scrollTo(%1, %2);").arg(p.rx()).arg(p.ry()));
+    }
 
     Q_PROPERTY(bool audioMuted READ isAudioMuted WRITE setAudioMuted)
     bool isAudioMuted() const { return page() ? page()->isAudioMuted() : false; }

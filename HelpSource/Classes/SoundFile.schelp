@@ -10,8 +10,13 @@ In most cases you will wish to send commands to the server to get it to load Sou
 
 code::
 (
+// ExampleFiles helps locate audio files used in examples
+p = ExampleFiles.child;
+// peek at the path to see location and the format of a path
+p.postln;
+
 f = SoundFile.new;
-f.openRead(Platform.resourceDir +/+ "sounds/a11wlk01.wav");
+f.openRead(p);
 f.inspect;
 f.close;
 )
@@ -25,6 +30,31 @@ ClassMethods::
 
 method::new
 Creates a new SoundFile instance.
+
+method:: writeArray
+Writes an array (or nested array) to a path as a sound file.
+
+argument:: array
+The data to write.
+Can be an array of numbers for a mono audio file, or an array of arrays-of-numbers for a multichannel audio file.
+Does not accept further nested arrays.
+Please note, that supercollider does not currently support very large arrays,
+roughly speaking,
+mono sound files longer than 45 mins at a sampling rate of 44100 will cause supercollider to fail silently.
+
+argument:: pathName
+The path as a link::Classes/String::.
+
+argument:: headerFormat
+See link::Classes/SoundFile#-headerFormat::.
+
+argument:: sampleFormat
+See link::Classes/SoundFile#-sampleFormat::.
+
+argument:: sampleRate
+A number, defaults to 44100.
+
+returns:: The path if successful, or throws if unsuccessful.
 
 method:: openRead
 Try to open the audio file at the given path.
@@ -63,7 +93,7 @@ SoundFile.collect("sounds/*").do { |f| f.path.postln };
 method::use
 Reads the data of a SoundFile, evaluates the function (passing the file as argument) and closes it again.
 code::
-SoundFile.use(Platform.resourceDir +/+ "sounds/a11wlk01.wav", { |f| f.inspect });
+SoundFile.use(ExampleFiles.child, { |f| f.inspect });
 ::
 
 method::normalize
@@ -98,7 +128,7 @@ table::
 ::
 Where strong::bufferSize::, strong::firstFrame::, strong::lastFrame:: are for buffer and playback position, and strong::out::, strong::server::, strong::group::, strong::addAction::, strong::amp:: are synth parameters. Here is the default SynthDef used for stereo files:
 code::
-SynthDef(\diskIn2, { |out, amp=1, bufnum, sustainTime, atk=0, rel=0, gate=1|
+SynthDef(\diskIn2, { |out, amp = 1, bufnum, sustainTime, atk = 0, rel = 0, gate = 1|
 	var sig = VDiskIn.ar(2, bufnum, BufRateScale.kr(bufnum));
 	var gateEnv = EnvGen.kr(Env([1, 1, 0], [sustainTime-rel, 0]));
 	var env = EnvGen.kr(Env.asr(atk, 1, rel), gate * gateEnv, doneAction: Done.freeSelf);
@@ -113,7 +143,7 @@ code::
 f = SoundFile.collect("sounds/*");
 e = f[1].cue;
 
-e = f[1].cue( (addAction: 2, group: 1) );	// synth will play ahead of the default group
+e = f[1].cue((addAction: 2, group: 1));	// synth will play ahead of the default group
 ::
 
 argument:: closeWhenDone
@@ -219,41 +249,56 @@ This is a link::Classes/String:: indicating the header format which was read by 
 definitionList::
 ## read/write header formats: ||
 table::
-## "AIFF" || Apple/SGI AIFF format
-## "WAV","WAVE", "RIFF" || Microsoft WAV format
-## "Sun", "NeXT" || Sun/NeXT AU format
-## "SD2" || Sound Designer 2
-## "IRCAM" || Berkeley/IRCAM/CARL
-## "raw" || no header = raw data
-## "MAT4" || Matlab (tm) V4.2 / GNU Octave 2.0
-## "MAT5" || Matlab (tm) V5.0 / GNU Octave 2.1
-## "PAF" || Ensoniq PARIS file format
-## "SVX" || Amiga IFF / SVX8 / SV16 format
-## "NIST" || Sphere NIST format
-## "VOC" || VOC files
-## "W64" || Sonic Foundry's 64 bit RIFF/WAV
-## "PVF" || Portable Voice Format
-## "XI" || Fasttracker 2 Extended Instrument
-## "HTK" || HMM Tool Kit format
-## "SDS" || Midi Sample Dump Standard
-## "AVR" || Audio Visual Research
-## "FLAC" || FLAC lossless file format
-## "CAF" || Core Audio File format
+## strong:: header :: || strong:: description:: || strong:: filename extensions:: || strong::notes::
+## "AIFF" || Apple/SGI AIFF format || .aif, .aiff ||
+## "WAV", "WAVE", "RIFF" || Microsoft WAV format || .wav, .wave ||
+## "Sun", "NeXT" || Sun/NeXT AU format || .au, .snd ||
+## "SD2" || Sound Designer 2 || .sd2 ||
+## "IRCAM" || Berkeley/IRCAM/CARL || .sf ||
+## "raw" || no header = raw data || ||
+## "MAT4" || Matlab (tm) V4.2 / GNU Octave 2.0 || .mat4 ||
+## "MAT5" || Matlab (tm) V5.0 / GNU Octave 2.1 || .mat5 ||
+## "PAF" || Ensoniq PARIS file format || .paf ||
+## "SVX" || Amiga IFF / SVX8 / SV16 format || .svx ||
+## "NIST" || Sphere NIST format || .nist, .sph ||
+## "VOC" || VOC files || .voc ||
+## "W64" || Sonic Foundry's 64 bit RIFF/WAV || .w64 || supports files larger than 4GB
+## "PVF" || Portable Voice Format || .pvf ||
+## "XI" || Fasttracker 2 Extended Instrument || .xm ||
+## "HTK" || HMM Tool Kit format || .htk ||
+## "SDS" || Midi Sample Dump Standard || .sds ||
+## "AVR" || Audio Visual Research || .avr ||
+## "FLAC" || FLAC lossless file format || .flac ||
+## "CAF" || Core Audio File format || .caf || supports files larger than 4GB
+## "RF64" || RF64 WAV format || .wav || supports files larger than 4GB
+## "OGG" || Xiph OGG container || .ogg || use .ogg extension for the "vorbis" format (see below)
+## "MPEG" || MPEG container || .mp1, .mp2, .mp3 || file extension depends on the format (see below)
 ::
 ::
-Additionally, a huge number of other formats are supported read only. Please note that WAV file support is limited to 4GB. For output of multiple channels or very long recordings we suggest to use W64 (or CAF on macOS).
+Additionally, a huge number of other formats are supported read only. Please note that WAV file support is limited to 4GB. For output of multiple channels or very long recordings we suggest to use RF64, W64, or CAF (on macOS).
+
 
 method::sampleFormat
-A link::Classes/String:: indicating the format of the sample data which was read by link::#-openRead:: and will be written by link::#-openWrite::. libsndfile determines which header formats support which sample formats. This information is detailed at http://www.mega-nerd.com/libsndfile . The possible header formats are:
+A link::Classes/String:: indicating the format of the sample data which was read by link::#-openRead:: and will be written by link::#-openWrite::. libsndfile determines which header formats support which sample formats. This information is detailed at http://www.mega-nerd.com/libsndfile . The possible sample formats are:
 definitionList::
 ## sample formats: ||
 table::
-## "int8", "int16", "int24", "int32"
-## "mulaw", "alaw",
-## "float"
+## strong:: format :: || strong:: notes:: || strong::supported headers:: (partial list) 
+## "int8", "int16", "int24", "int32" || integer formats || "AIFF", "WAV", "RF64", "W64", "CAF", "FLAC" 
+## "float" || floating-point format (won't clip above 0dB) || "AIFF", "WAV", "RF64", "W64", "CAF" 
+## "mulaw", "alaw" || U-law and A-law encoding|| "WAV", "W64" 
+## "vorbis" || "Vorbis" compressed format || "OGG" 
+## "mp1", "mp2", "mp3" ||  MPEG Layer I, II, and III compressed formats || "MPEG" (see strong::NOTE:: below)
 ::
 ::
 Not all header formats support all sample formats.
+
+Note::
+Support for code::MPEG:: formats requires code::libsndfile:: library that supports it. This library is included in SuperCollider's macOS and Windows release builds version teletype::3.13:: and up. However, on platforms where system installation of libsndfile is used (e.g. Linux), or when building SC locally, MPEG support requires code::libsndfile:: version teletype::1.1.0:: or higher and that the library was built with the MPEG functionality enabled.
+::
+
+Currently there's no way to control the quality (bitrate) when writing OGG vorbis and MPEG files - the default bitrate set in libsndfile is used.
+
 
 method::numFrames
 The number of sample frames in the file.
@@ -306,7 +351,7 @@ f.close;
 
 s.boot;
 
-// It's a proper audio file -- server can load it
+// It's a proper audio file — server can load it
 b = Buffer.read(s, PathName.tmp +/+ "sf-help.wav");
 
 // It's a sinewave...

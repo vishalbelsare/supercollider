@@ -110,6 +110,7 @@ void RunningSum_Dtor(RunningSum* unit);
 
 void PV_OnsetDetectionBase_Ctor(PV_OnsetDetectionBase* unit) {
     float fbufnum = ZIN0(0);
+    unit->m_prevframe = nullptr;
 
     PV_FEAT_GET_BUF_UNLOCKED
 
@@ -118,6 +119,7 @@ void PV_OnsetDetectionBase_Ctor(PV_OnsetDetectionBase* unit) {
 
     if (bufOK) {
         unit->m_prevframe = (float*)RTAlloc(unit->mWorld, insize);
+        ClearUnitIfMemFailed(unit->m_prevframe);
         memset(unit->m_prevframe, 0, insize);
     }
 
@@ -141,7 +143,7 @@ void PV_JensenAndersen_Ctor(PV_JensenAndersen* unit) {
     unit->m_sf = 0.0;
     unit->m_sc = 0.0;
 
-    unit->m_fourkindex = (int)(4000.0 / (unit->mWorld->mSampleRate)) * (unit->m_numbins);
+    unit->m_fourkindex = (int)(4000.0 / FULLRATE) * (unit->m_numbins);
 
     SETCALC(PV_JensenAndersen_next);
 }
@@ -328,7 +330,7 @@ void PV_HainsworthFoote_next(PV_HainsworthFoote* unit, int inNumSamples) {
             outval = 1.0;
             unit->m_waiting = 1;
             unit->m_waitSamp = inNumSamples;
-            unit->m_waitLen = (int)(ZIN0(4) * (unit->mWorld->mSampleRate));
+            unit->m_waitLen = (int)(ZIN0(4) * FULLRATE);
         }
 
         // take copy of this frame's magnitudes as prevframe
@@ -352,6 +354,7 @@ void RunningSum_Ctor(RunningSum* unit) {
     unit->mcount = 0; // unit->msamp-1;
 
     unit->msquares = (float*)RTAlloc(unit->mWorld, unit->msamp * sizeof(float));
+    ClearUnitIfMemFailed(unit->msquares);
     // initialise to zeroes
     for (int i = 0; i < unit->msamp; ++i)
         unit->msquares[i] = 0.f;

@@ -4,7 +4,7 @@ categories:: External Control>OSC
 related:: Guides/OSC_communication, Classes/OSCdef, Classes/NetAddr
 
 DESCRIPTION::
-OSCFunc (and its subclass link::Classes/OSCdef::) registers one or more functions to respond to an incoming OSC message which matches a specified OSC Address. Many of its methods are inherited from its superclass link::Classes/AbstractResponderFunc::. OSCFunc supports pattern matching of wildcards etc. in incoming messages. For efficiency reasons you must specify that an OSCFunc will employ pattern matching by creating it with the link::#*newMatching:: method, or by passing a matching dispatcher to link::#*new::. For details on the Open Sound Control protocol, see http://opensoundcontrol.org/spec-1_0
+OSCFunc (and its subclass link::Classes/OSCdef::) registers one or more functions to respond to an incoming OSC message which matches a specified OSC Address. Many of its methods are inherited from its superclass link::Classes/AbstractResponderFunc::. OSCFunc supports pattern matching of wildcards etc. in incoming messages. For efficiency reasons you must specify that an OSCFunc will employ pattern matching by creating it with the link::#*newMatching:: method, or by passing a matching dispatcher to link::#*new::. For details on the Open Sound Control protocol, see http://opensoundcontrol.org/spec-1_0.html
 
 CLASSMETHODS::
 private:: initClass, cmdPeriod
@@ -98,9 +98,9 @@ EXAMPLES::
 code::
 n = NetAddr("127.0.0.1", NetAddr.langPort); // local machine
 
-OSCFunc.newMatching({|msg, time, addr, recvPort| \matching.postln}, '/chat', n); // path matching
-OSCFunc({|msg, time, addr, recvPort| \oneShot.postln}, '/chat', n).oneShot; // once only
-OSCdef(\test, {|msg, time, addr, recvPort| \unmatching.postln}, '/chat', n); // def style
+OSCFunc.newMatching({ |msg, time, addr, recvPort| \matching.postln }, '/chat', n); // path matching
+OSCFunc({ |msg, time, addr, recvPort| \oneShot.postln }, '/chat', n).oneShot; // once only
+OSCdef(\test, { |msg, time, addr, recvPort| \unmatching.postln }, '/chat', n); // def style
 
 m = NetAddr("127.0.0.1", NetAddr.langPort); // loopback
 
@@ -119,9 +119,9 @@ AbstractResponderFunc.allDisabled
 
 // change funcs
 OSCdef(\test).enable;
-OSCdef(\test, {|msg, time, addr, recvPort| 'Changed Unmatching'.postln}, '/chat', n); // replace at key \test
+OSCdef(\test, { |msg, time, addr, recvPort| 'Changed Unmatching'.postln }, '/chat', n); // replace at key \test
 m.sendMsg("/chat", "Hello App 1");
-OSCdef(\test).add(f = {\foo.postln}); // add another func
+OSCdef(\test).add(f = { \foo.postln }); // add another func
 m.sendMsg("/chat", "Hello App 1");
 OSCdef(\test).clear; // remove all functions
 m.sendMsg("/chat", "Hello App 1");

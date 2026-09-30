@@ -993,7 +993,7 @@ static void KeyTrack_calculatekey(KeyTrack*, uint32);
 
 
 void KeyTrack_Ctor(KeyTrack* unit) {
-    unit->m_srate = unit->mWorld->mFullRate.mSampleRate;
+    unit->m_srate = FULLRATE;
 
     // if sample rate is 88200 or 96000, assume taking double size FFT to start with
     if (unit->m_srate > (44100.0 * 1.5))
@@ -1012,6 +1012,7 @@ void KeyTrack_Ctor(KeyTrack* unit) {
 
     // only need space for half!
     unit->m_FFTBuf = (float*)RTAlloc(unit->mWorld, NOVER2 * sizeof(float));
+    ClearUnitIfMemFailed(unit->m_FFTBuf);
 
     // zero chroma
     Clear(12, unit->m_chroma);
@@ -1043,7 +1044,7 @@ void KeyTrack_Dtor(KeyTrack* unit) { RTFree(unit->mWorld, unit->m_FFTBuf); }
 
 
 void KeyTrack_next(KeyTrack* unit, int wrongNumSamples) {
-    // int numSamples = unit->mWorld->mFullRate.mBufLength;
+    // int numSamples = FULLBUFLENGTH;
 
     // float *output = ZOUT(0);
 

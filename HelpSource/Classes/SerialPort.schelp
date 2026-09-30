@@ -2,16 +2,11 @@ class:: SerialPort
 summary:: serial port interface
 categories:: External Control
 
-This class provides basic support for serial port communication. Ports are opened with link::#*new::
- and closed with link::#-close::.
+This class provides basic support for serial port communication. Ports are opened with link::#*new:: and closed with link::#-close::.
 
-Each SerialPort object uses an 8KB internal buffer and reads data as soon as it is available. If the
-data is not read out of the buffer and the buffer fills up, incoming bytes will be dropped. Use
-link::#-rxErrors:: to get a count of the number of bytes dropped.
+Each SerialPort object uses an 8KB internal buffer and reads data as soon as it is available. If the data is not read out of the buffer and the buffer fills up, incoming bytes will be dropped. Use link::#-rxErrors:: to get a count of the number of bytes dropped.
 
-Since it is constantly polling the port for available data, a SerialPort object knows almost
-immediately when the port has been lost. When this happens, it will call the link::#-doneAction::
-callback and mark itself as closed.
+Since it is constantly polling the port for available data, a SerialPort object knows almost immediately when the port has been lost. When this happens, it will call the link::#-doneAction:: callback and mark itself as closed.
 
 ClassMethods::
 
@@ -53,7 +48,7 @@ code::crtscts:: and code::xonxoff:: cannot both be true; code::*new:: will throw
 are set.
 
 method::devices
-Retrieve an array of available devices represented as link::Classes/String#Strings::. On macOS and Linux, this list is obtained using a number of regular expression rules on files in the code::/dev/:: directory. On Windows, this is obtained using a registry key. The matching rules are designed to be identical to that of the Arduino IDE.
+Retrieve an array of available devices represented as link::Classes/String##Strings::. On macOS and Linux, this list is obtained using a number of regular expression rules on files in the code::/dev/:: directory. On Windows, this is obtained using a registry key. The matching rules are designed to be identical to that of the Arduino IDE.
 
 For backward compatibility, if code::SerialPort.devicePattern:: is not nil, code::SerialPort.devicePattern.pathMatch:: is returned instead of the default behavior.
 
@@ -145,14 +140,14 @@ fork { p.read.postln }; // may suspend thisThread - should be called within a ro
 
 // write a byte to the device
 
-fork {p.put(42) }; // may suspend thisThread - should be called within a routine
+fork { p.put(42) }; // may suspend thisThread - should be called within a routine
 
 // write multiple bytes to the device
 
 fork { p.putAll("whaddayawant") };
 fork { p.putAll(Int8Array[13, 10]) };
 
-p.doneAction = { "my serial port got closed".postln; }
+p.doneAction = { "my serial port got closed".postln }
 
 p.close; // close the port
 
@@ -171,15 +166,15 @@ Always make sure the serial monitor is closed in the Arduino application before 
 code::
 (
 p = SerialPort(
-	"/dev/tty.usbserial-A800crTT",	//edit to match your port. SerialPort.listDevices
-	baudrate: 9600,	//check that baudrate is the same as in arduino sketch
+	"/dev/tty.usbserial-A800crTT",	// edit to match your port. SerialPort.listDevices
+	baudrate: 9600,	// check that baudrate is the same as in arduino sketch
 	crtscts: true);
 )
 
-//send serial data - slow pulsating
+// send serial data - slow pulsating
 (
 r = Routine({
-	inf.do{|i|
+	inf.do{ |i|
 		p.put(i.fold(0, 100).linexp(0, 100, 1, 255).asInteger.postln);
 		0.02.wait;
 	};
@@ -202,22 +197,22 @@ Always make sure the serial monitor is closed in the Arduino application before 
 code::
 (
 p = SerialPort(
-	"/dev/tty.usbserial-A800crTT",	//edit to match your port. SerialPort.listDevices
-	baudrate: 9600,	//check that baudrate is the same as in arduino sketch
+	"/dev/tty.usbserial-A800crTT",	// edit to match your port. SerialPort.listDevices
+	baudrate: 9600,	// check that baudrate is the same as in arduino sketch
 	crtscts: true);
 )
 
-//read 10bit serial data sent from Arduino's Serial.println
+// read 10bit serial data sent from Arduino's Serial.println
 (
-r= Routine({
+r = Routine({
 	var byte, str, res;
-	99999.do{|i|
-		if(p.read==10, {
+	99999.do{ |i|
+		if(p.read == 10, {
 			str = "";
-			while({byte = p.read; byte !=13 }, {
-				str= str++byte.asAscii;
+			while({ byte = p.read; byte != 13 }, {
+				str = str++byte.asAscii;
 			});
-			res= str.asInteger;
+			res = str.asInteger;
 			("read value:"+res).postln;
 		});
 	};

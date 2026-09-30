@@ -28,6 +28,7 @@ An object archiving system for SuperCollider.
 
 #include "PyrObject.h"
 #include "SC_AllocPool.h"
+#include "InitAlloc.h"
 
 #include "PyrKernel.h"
 #include "PyrPrimitive.h"
@@ -87,8 +88,8 @@ public:
         return size;
     }
 
-    long prepareToWriteArchive(PyrSlot* objectSlot) {
-        long err = errNone;
+    std::int64_t prepareToWriteArchive(PyrSlot* objectSlot) {
+        std::int64_t err = errNone;
 
         try {
             slotCopy(&mTopSlot, objectSlot);
@@ -101,8 +102,8 @@ public:
         return err;
     }
 
-    long writeArchive() {
-        long err = errNone;
+    std::int64_t writeArchive() {
+        std::int64_t err = errNone;
 
         try {
             writeArchiveHeader();
@@ -124,9 +125,9 @@ public:
         return err;
     }
 
-    long readArchive(PyrSlot* objectSlot) {
+    std::int64_t readArchive(PyrSlot* objectSlot) {
         // postfl("->readArchive\n");
-        long err = errNone;
+        std::int64_t err = errNone;
 
 
         SetNil(objectSlot);
@@ -151,9 +152,7 @@ public:
         } catch (std::exception& ex) {
             error(ex.what());
             err = errFailed;
-        } catch (...) {
-            err = errFailed;
-        }
+        } catch (...) { err = errFailed; }
         // postfl("<-readArchive\n");
         return err;
     }
@@ -193,6 +192,7 @@ private:
 
         int32 newSize = newObjectArrayCapacity * sizeof(PyrObject*);
         PyrObject** newArray = (PyrObject**)g->allocPool->Alloc(newSize);
+        MEMFAIL(newArray);
         memcpy(newArray, mObjectArray, mNumObjects * sizeof(PyrObject*));
         if (mObjectArray != mInitialObjectArray) {
             g->allocPool->Free(mObjectArray);

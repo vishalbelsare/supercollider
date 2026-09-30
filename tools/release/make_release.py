@@ -61,12 +61,14 @@ def main(version: Version):
     prompts = [
         "Is the repo clean?",
         "If this is a minor release, have you made the release branch?",
+        "If you made the release branch, did you update SCVersion.txt on the develop branch to the next minor release?",
         "Is the repo on the current release branch?",
         [f"Have all the discussions in the pinned '{discussions_issue_title}' ticket been resolved?", "https://github.com/supercollider/supercollider/issues"],
         ["If this is a patch release, have all the PRs in the cherry-pick GitHub project been added to the release branch?", "https://github.com/supercollider/supercollider/projects/"],
         "Have all the deprecations been either removed or deferred to a later release?\n      Deprecations are removed on a case-by-case basis with each minor (3.x) release.\n      Corresponding UGen and primitive code should also be removed.\n      Be careful when deprecating UGens and be considerate of alternate clients!",
         "Have all the removed deprecations been documented in the changelog?",
         ["Have you reviewed the platform support information in the main README.md for accuracy?", f"https://github.com/supercollider/supercollider/blob/{release_branch_name}/README.md#platform-support"],
+        "Have you added a release entry to the AppStream/Flatpak metafile located at platform/linux/online.supercollider.SuperCollider.metainfo.xml?",
 
         "Have you updated SCVersion.txt?",
         "Have you updated CHANGELOG.md with information about merged PRs?",
@@ -105,7 +107,7 @@ def main(version: Version):
         # maybe remove? or indicate optional?
         "Did you announce on Reddit (/r/supercollider)?",
 
-        ["If it's a beta release, did you merge the current release branch into develop? Do not merge the release branch into main yet!", f"https://github.com/supercollider/supercollider/compare/develop...{release_branch_name}"],
+        ["If it's a beta release, did you merge the current release branch into develop, resolving possible conflict in SCVersion.txt? Do not merge the release branch into main yet!", f"https://github.com/supercollider/supercollider/compare/develop...{release_branch_name}"],
         ["If it's a proper release, did you merge main into develop?", "https://github.com/supercollider/supercollider/compare/develop...main"]
             ]
 

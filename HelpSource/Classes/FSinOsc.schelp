@@ -23,6 +23,8 @@ method::ar, kr
 
 argument::freq
 Frequency in Hertz.
+note:: While an audio-rate frequency input is accepted, frequency is
+is currently only updated internally at only control-rate.::
 
 argument::iphase
 Initial phase offset.
@@ -45,4 +47,3 @@ code::
 { FSinOsc.ar(FSinOsc.ar(XLine.kr(4, 401, 8), 0.0, 200, 800)) * 0.2 }.play;
 
 ::
-

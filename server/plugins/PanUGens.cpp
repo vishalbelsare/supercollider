@@ -153,7 +153,7 @@ void LinPan2_Ctor(LinPan2* unit) {
 #ifdef NOVA_SIMD
         if (BUFLENGTH == 64)
             SETCALC(LinPan2_next_ak_nova_64);
-        if (boost::alignment::is_aligned(BUFLENGTH, 16))
+        else if (boost::alignment::is_aligned(BUFLENGTH, 16))
             SETCALC(LinPan2_next_ak_nova);
         else
 #endif
@@ -429,7 +429,7 @@ void XFade2_Ctor(XFade2* unit) {
 #ifdef NOVA_SIMD
         if (BUFLENGTH == 64)
             SETCALC(XFade2_next_ak_nova_64);
-        if (boost::alignment::is_aligned(BUFLENGTH, 16))
+        else if (boost::alignment::is_aligned(BUFLENGTH, 16))
             SETCALC(XFade2_next_ak_nova);
         else
 #endif
@@ -796,7 +796,7 @@ void Pan2_Ctor(Pan2* unit) {
 #if defined(NOVA_SIMD)
         if (BUFLENGTH == 64)
             SETCALC(Pan2_next_ak_nova_64);
-        if (boost::alignment::is_aligned(BUFLENGTH, 16))
+        else if (boost::alignment::is_aligned(BUFLENGTH, 16))
             SETCALC(Pan2_next_ak_nova);
         else
             SETCALC(Pan2_next_ak);
@@ -1278,11 +1278,7 @@ void PanAz_Ctor(PanAz* unit) {
             ZOUT0(i) = 0.f;
 
         unit->m_chanamp = (float*)RTAlloc(unit->mWorld, numOutputs * sizeof(float));
-        if (!unit->m_chanamp) {
-            Print("PanAz: RT memory allocation failed\n");
-            SETCALC(ClearUnitOutputs);
-            return;
-        }
+        ClearUnitIfMemFailed(unit->m_chanamp);
 
         std::fill_n(unit->m_chanamp, numOutputs, 0);
 
@@ -1306,13 +1302,13 @@ void PanAz_Dtor(PanAz* unit) {
 void PanAz_next_ak(PanAz* unit, int inNumSamples) {
     float pos = ZIN0(1);
     float level = ZIN0(2);
-    float width = ZIN0(3);
+    float width = std::abs(ZIN0(3));
     float orientation = ZIN0(4);
 
     int numOutputs = unit->mNumOutputs;
-    float rwidth = sc_reciprocal(width);
+    float rwidth = static_cast<float>(sc_reciprocal(static_cast<double>(width)));
     float range = numOutputs * rwidth;
-    float rrange = sc_reciprocal(range);
+    float rrange = static_cast<float>(sc_reciprocal(static_cast<double>(range)));
 
     pos = pos * 0.5f * numOutputs + width * 0.5f + orientation;
 
@@ -1324,7 +1320,7 @@ void PanAz_next_ak(PanAz* unit, int inNumSamples) {
         float chanpos = pos - i;
         chanpos *= rwidth;
         chanpos = chanpos - range * sc_floor(rrange * chanpos);
-        if (chanpos > 1.f) {
+        if (chanpos >= 1.f) {
             nextchanamp = 0.f;
         } else {
             nextchanamp = level * ft->mSine[(long)(4096.f * chanpos)];
@@ -1351,13 +1347,13 @@ void PanAz_next_ak(PanAz* unit, int inNumSamples) {
 FLATTEN void PanAz_next_ak_nova(PanAz* unit, int inNumSamples) {
     float pos = ZIN0(1);
     float level = ZIN0(2);
-    float width = ZIN0(3);
+    float width = std::abs(ZIN0(3));
     float orientation = ZIN0(4);
 
     int numOutputs = unit->mNumOutputs;
-    float rwidth = sc_reciprocal(width);
+    float rwidth = static_cast<float>(sc_reciprocal(static_cast<double>(width)));
     float range = numOutputs * rwidth;
-    float rrange = sc_reciprocal(range);
+    float rrange = static_cast<float>(sc_reciprocal(static_cast<double>(range)));
 
     pos = pos * 0.5f * numOutputs + width * 0.5f + orientation;
 
@@ -1370,7 +1366,7 @@ FLATTEN void PanAz_next_ak_nova(PanAz* unit, int inNumSamples) {
         float chanpos = pos - i;
         chanpos *= rwidth;
         chanpos = chanpos - range * sc_floor(rrange * chanpos);
-        if (chanpos > 1.f) {
+        if (chanpos >= 1.f) {
             nextchanamp = 0.f;
         } else {
             nextchanamp = level * ft->mSine[(long)(4096.f * chanpos)];
@@ -1393,13 +1389,13 @@ FLATTEN void PanAz_next_ak_nova(PanAz* unit, int inNumSamples) {
 
 void PanAz_next_aa(PanAz* unit, int inNumSamples) {
     float level = ZIN0(2);
-    float width = ZIN0(3);
+    float width = std::abs(ZIN0(3));
     float orientation = ZIN0(4);
 
     int numOutputs = unit->mNumOutputs;
-    float rwidth = sc_reciprocal(width);
+    float rwidth = static_cast<float>(sc_reciprocal(static_cast<double>(width)));
     float range = numOutputs * rwidth;
-    float rrange = sc_reciprocal(range);
+    float rrange = static_cast<float>(sc_reciprocal(static_cast<double>(range)));
 
 
     // compute constant parts with which the pos has to be multiplied/added to respect numOutputs, width and orientation
@@ -1422,7 +1418,7 @@ void PanAz_next_aa(PanAz* unit, int inNumSamples) {
             chanpos = chanpos - range * sc_floor(rrange * chanpos);
 
             float chanamp;
-            if (chanpos > 1.f) { chanamp = 0.f; } else { chanamp = level * ft->mSine[(long)(4096.f * chanpos)]; }
+            if (chanpos >= 1.f) { chanamp = 0.f; } else { chanamp = level * ft->mSine[(long)(4096.f * chanpos)]; }
 
             ZXP(out) = ZXP(in) * chanamp;
 

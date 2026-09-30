@@ -111,7 +111,7 @@ void DiskIOMsg::Perform() {
     sf_count_t count;
     switch (mCommand) {
     case kDiskCmd_Read:
-        count = buf->sndfile ? sf_readf_float(buf->sndfile, buf->data + mPos * buf->channels, mFrames) : 0;
+        count = buf->sndfile ? sf_readf_float(GETSNDFILE(buf), buf->data + mPos * buf->channels, mFrames) : 0;
         if (count < mFrames) {
             memset(buf->data + (mPos + count) * buf->channels, 0, (mFrames - count) * buf->channels * sizeof(float));
             World_GetBuf(mWorld, mBufNum)->mask = mPos + count;
@@ -126,17 +126,17 @@ void DiskIOMsg::Perform() {
             memset(buf->data + mPos * buf->channels, 0, mFrames * buf->channels * sizeof(float));
             goto leave;
         }
-        count = sf_readf_float(buf->sndfile, buf->data + mPos * buf->channels, mFrames);
+        count = sf_readf_float(GETSNDFILE(buf), buf->data + mPos * buf->channels, mFrames);
         while (mFrames -= count) {
-            sf_seek(buf->sndfile, 0, SEEK_SET);
-            count = sf_readf_float(buf->sndfile, buf->data + (mPos + count) * buf->channels, mFrames);
+            sf_seek(GETSNDFILE(buf), 0, SEEK_SET);
+            count = sf_readf_float(GETSNDFILE(buf), buf->data + (mPos + count) * buf->channels, mFrames);
         }
         break;
     case kDiskCmd_Write:
         // printf("kDiskCmd_Write %d %p\n", mBufNum, buf->sndfile);
         if (!buf->sndfile)
             goto leave;
-        count = sf_writef_float(buf->sndfile, buf->data + mPos * buf->channels, mFrames);
+        count = sf_writef_float(GETSNDFILE(buf), buf->data + mPos * buf->channels, mFrames);
         break;
     }
 
@@ -223,7 +223,7 @@ void DiskIn_Ctor(DiskIn* unit) {
 
 void DiskIn_next(DiskIn* unit, int inNumSamples) {
     GET_BUF_SHARED
-    if (!bufData || ((bufFrames & ((unit->mWorld->mBufLength << 1) - 1)) != 0)) {
+    if (!bufData || ((bufFrames & ((FULLBUFLENGTH << 1) - 1)) != 0)) {
         unit->m_framepos = 0;
         ClearUnitOutputs(unit, inNumSamples);
         return;
@@ -287,14 +287,14 @@ void DiskIn_next(DiskIn* unit, int inNumSamples) {
             if ((int)ZIN0(1)) { // loop
                 if (!bufr->sndfile)
                     memset(bufr->data + mPos * bufr->channels, 0, bufFrames2 * bufr->channels * sizeof(float));
-                count = sf_readf_float(bufr->sndfile, bufr->data + mPos * bufr->channels, bufFrames2);
+                count = sf_readf_float(GETSNDFILE(bufr), bufr->data + mPos * bufr->channels, bufFrames2);
                 while (bufFrames2 -= count) {
-                    sf_seek(bufr->sndfile, 0, SEEK_SET);
-                    count = sf_readf_float(bufr->sndfile, bufr->data + (mPos + count) * bufr->channels, bufFrames2);
+                    sf_seek(GETSNDFILE(bufr), 0, SEEK_SET);
+                    count = sf_readf_float(GETSNDFILE(bufr), bufr->data + (mPos + count) * bufr->channels, bufFrames2);
                 }
             } else { // non-loop
-                count =
-                    bufr->sndfile ? sf_readf_float(bufr->sndfile, bufr->data + mPos * bufr->channels, bufFrames2) : 0;
+                count = bufr->sndfile ? sf_readf_float(GETSNDFILE(bufr), bufr->data + mPos * bufr->channels, bufFrames2)
+                                      : 0;
                 if (count < bufFrames2) {
                     memset(bufr->data + (mPos + count) * bufr->channels, 0,
                            (bufFrames2 - count) * bufr->channels * sizeof(float));
@@ -320,7 +320,7 @@ void DiskOut_Ctor(DiskOut* unit) {
 void DiskOut_next(DiskOut* unit, int inNumSamples) {
     GET_BUF
 
-    if (!bufData || ((bufFrames & ((unit->mWorld->mBufLength << 1) - 1)) != 0)) {
+    if (!bufData || ((bufFrames & ((FULLBUFLENGTH << 1) - 1)) != 0)) {
         unit->m_framepos = 0;
         //		unit->m_framewritten = 0;
         return;
@@ -469,13 +469,14 @@ static void VDiskIn_request_buffer(VDiskIn* unit, float fbufnum, uint32 bufFrame
         if ((int)ZIN0(2)) { // loop
             if (!bufr->sndfile)
                 memset(bufr->data + mPos * bufr->channels, 0, bufFrames2 * bufr->channels * sizeof(float));
-            count = sf_readf_float(bufr->sndfile, bufr->data + mPos * bufr->channels, bufFrames2);
+            count = sf_readf_float(GETSNDFILE(bufr), bufr->data + mPos * bufr->channels, bufFrames2);
             while (bufFrames2 -= count) {
-                sf_seek(bufr->sndfile, 0, SEEK_SET);
-                count = sf_readf_float(bufr->sndfile, bufr->data + (mPos + count) * bufr->channels, bufFrames2);
+                sf_seek(GETSNDFILE(bufr), 0, SEEK_SET);
+                count = sf_readf_float(GETSNDFILE(bufr), bufr->data + (mPos + count) * bufr->channels, bufFrames2);
             }
         } else { // non-loop
-            count = bufr->sndfile ? sf_readf_float(bufr->sndfile, bufr->data + mPos * bufr->channels, bufFrames2) : 0;
+            count =
+                bufr->sndfile ? sf_readf_float(GETSNDFILE(bufr), bufr->data + mPos * bufr->channels, bufFrames2) : 0;
             if (count < bufFrames2) {
                 memset(bufr->data + (mPos + count) * bufr->channels, 0,
                        (bufFrames2 - count) * bufr->channels * sizeof(float));
@@ -491,7 +492,7 @@ template <bool First> static inline void VDiskIn_next_(VDiskIn* unit, int inNumS
     bool test = false;
 
     GET_BUF_SHARED
-    if (!bufData || ((bufFrames & ((unit->mWorld->mBufLength << 1) - 1)) != 0)) {
+    if (!bufData || ((bufFrames & ((FULLBUFLENGTH << 1) - 1)) != 0)) {
         unit->m_framePos = 0.;
         unit->m_count = 0;
         ClearUnitOutputs(unit, inNumSamples);
@@ -583,7 +584,7 @@ void VDiskIn_next_rate1(VDiskIn* unit, int inNumSamples) {
     bool test = false;
 
     GET_BUF_SHARED
-    if (!bufData || ((bufFrames & ((unit->mWorld->mBufLength << 1) - 1)) != 0)) {
+    if (!bufData || ((bufFrames & ((FULLBUFLENGTH << 1) - 1)) != 0)) {
         unit->m_iFramePos = 0.;
         unit->m_count = 0;
         ClearUnitOutputs(unit, inNumSamples);
@@ -626,7 +627,6 @@ void VDiskIn_next_rate1(VDiskIn* unit, int inNumSamples) {
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-C_LINKAGE SC_API_EXPORT void unload(InterfaceTable* inTable) { delete gDiskIO; }
 
 PluginLoad(DiskIO) {
     ft = inTable;
@@ -637,5 +637,7 @@ PluginLoad(DiskIO) {
     DefineDtorUnit(DiskOut);
     DefineSimpleUnit(VDiskIn);
 }
+
+PluginUnload(DiskIO) { delete gDiskIO; }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////

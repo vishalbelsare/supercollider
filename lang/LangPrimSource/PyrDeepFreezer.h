@@ -30,6 +30,7 @@ An object archiving system for SuperCollider.
 
 #include "PyrObject.h"
 #include "SC_AllocPool.h"
+#include "InitAlloc.h"
 #include "PyrKernel.h"
 #include "PyrPrimitive.h"
 #include "VMGlobals.h"
@@ -50,8 +51,8 @@ public:
             g->allocPool->Free(objectArray);
     }
 
-    long doDeepFreeze(PyrSlot* objectSlot) {
-        long err = errNone;
+    std::int64_t doDeepFreeze(PyrSlot* objectSlot) {
+        std::int64_t err = errNone;
 
         try {
             if (IsObj(objectSlot)) {
@@ -83,6 +84,7 @@ private:
 
         int32 newSize = newObjectArrayCapacity * sizeof(PyrObject*);
         PyrObject** newArray = (PyrObject**)g->allocPool->Alloc(newSize);
+        MEMFAIL(newArray);
         memcpy(newArray, objectArray, numObjects * sizeof(PyrObject*));
         if (objectArrayCapacity > kDeepFreezerObjectArrayInitialCapacity)
             g->allocPool->Free(objectArray);
